@@ -69,6 +69,7 @@
     let svgPickerOpen = $derived(svgPickerKeyIndex !== null);
     let deleteConfirmIndex = $state(/** @type {number | null} */ (null));
     let sidebarOpen = $state(false);
+    let takeSnapshot = $state(/** @type {(() => void) | null} */ (null));
 
     const WELCOME_SESSION_KEY = "clicker-designer-welcome-seen";
     let showWelcome = $state(
@@ -298,7 +299,7 @@
                     </div>
                     <button
                         type="button"
-                        class="w-full py-3 px-4 text-[15px] font-semibold text-white bg-indigo-500 rounded-lg hover:bg-indigo-600 transition-colors touch-manipulation min-h-[44px]"
+                        class="w-full py-3 px-4 text-[15px] font-semibold text-white bg-brand rounded-lg hover:bg-brand-hover transition-colors touch-manipulation min-h-[44px]"
                         onclick={() => closeWelcome()}
                     >
                         Get started
@@ -309,7 +310,7 @@
     {/if}
 
     <aside
-        class="fixed md:relative inset-y-0 left-0 z-40 w-[260px] max-w-[85vw] md:max-w-none flex-shrink-0 flex flex-col gap-4 overflow-y-auto bg-slate-50 border-r border-slate-200 p-4 md:p-5 transition-transform duration-200 ease-out {sidebarOpen
+        class="fixed md:relative inset-y-0 left-0 z-40 w-[260px] max-w-[85vw] md:max-w-none flex-shrink-0 flex flex-col gap-4 overflow-y-auto bg-surface border-r border-brand-border p-4 md:p-5 transition-transform duration-200 ease-out {sidebarOpen
             ? 'translate-x-0'
             : '-translate-x-full md:translate-x-0'}"
         aria-label="Options"
@@ -529,7 +530,7 @@
             >
             <input
                 type="checkbox"
-                class="w-[18px] h-[18px] accent-indigo-500 cursor-pointer touch-manipulation"
+                class="w-[18px] h-[18px] accent-brand cursor-pointer touch-manipulation"
                 checked={showBorder}
                 onchange={(e) =>
                     updateActiveDesign({ showBorder: e.currentTarget.checked })}
@@ -600,8 +601,8 @@
                         type="button"
                         class="aspect-square p-2 border-2 rounded-lg bg-white cursor-pointer flex items-center justify-center text-xs text-slate-500 transition-colors touch-manipulation min-h-[44px] {svgPickerKeyIndex !==
                             null && !keycapSvg[svgPickerKeyIndex]
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                            : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50'}"
+                            ? 'border-brand bg-brand-light text-brand'
+                            : 'border-slate-200 hover:border-brand-muted hover:bg-brand-light'}"
                         title="None"
                         onclick={() => {
                             if (svgPickerKeyIndex !== null && activeDesign) {
@@ -629,8 +630,8 @@
                             class="aspect-square p-2 border-2 rounded-lg bg-white cursor-pointer flex items-center justify-center transition-colors touch-manipulation min-h-[44px] {svgPickerKeyIndex !==
                                 null &&
                             keycapSvg[svgPickerKeyIndex] === asset.id
-                                ? 'border-indigo-500 bg-indigo-50'
-                                : 'border-slate-200 hover:border-indigo-400 hover:bg-indigo-50'}"
+                                ? 'border-brand bg-brand-light'
+                                : 'border-slate-200 hover:border-brand-muted hover:bg-brand-light'}"
                             title={asset.name}
                             onclick={() => {
                                 if (
@@ -723,11 +724,11 @@
 
     <div class="flex-1 min-w-0 flex flex-col overflow-hidden">
         <header
-            class="flex-shrink-0 flex items-center gap-3 md:gap-4 px-3 py-2 md:px-4 md:py-2.5 bg-slate-50 border-b border-slate-200"
+            class="shrink-0 flex items-center gap-3 md:gap-4 px-3 py-2 md:px-4 md:py-2.5 bg-surface border-b border-brand-border"
         >
             <button
                 type="button"
-                class="md:hidden w-10 h-10 flex-shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 touch-manipulation"
+                class="md:hidden w-10 h-10 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 touch-manipulation"
                 aria-label="Open options"
                 onclick={() => (sidebarOpen = true)}
             >
@@ -756,7 +757,7 @@
                             >
                             <input
                                 type="text"
-                                class="w-7 md:w-8 px-1.5 py-1 md:py-1.5 text-sm md:text-base text-center uppercase border border-slate-200 rounded bg-white touch-manipulation min-h-[30px] md:min-h-0"
+                                class="w-8 h-8 md:w-9 md:h-9 p-0 text-sm md:text-base text-center uppercase border border-slate-200 rounded bg-white touch-manipulation aspect-square"
                                 maxlength="1"
                                 placeholder=""
                                 value={letter}
@@ -783,7 +784,7 @@
                         </label>
                         <button
                             type="button"
-                            class="w-8 h-8 md:w-8 md:h-8 flex items-center justify-center p-1 border border-slate-200 rounded-md bg-white hover:border-indigo-500 hover:bg-indigo-50 touch-manipulation min-h-[30px] md:min-h-0"
+                            class="w-8 h-8 md:h-9 md:w-9 flex items-center justify-center p-1 border border-slate-200 rounded-md bg-white hover:border-brand hover:bg-brand-light touch-manipulation min-h-[30px] md:min-h-0"
                             title="Pick SVG icon"
                             aria-label="Pick SVG for key {i + 1}"
                             onclick={() => (svgPickerKeyIndex = i)}
@@ -808,7 +809,7 @@
             </div>
         </header>
         <div
-            class="md:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-2 bg-slate-100/80 border-b border-slate-200 flex-wrap"
+            class="md:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-2 bg-brand-light/60 border-b border-brand-border flex-wrap"
         >
             <select
                 class="h-8 min-w-[3rem] px-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-700 cursor-pointer touch-manipulation"
@@ -878,7 +879,7 @@
             >
                 <input
                     type="checkbox"
-                    class="w-3.5 h-3.5 rounded border-slate-300 text-indigo-500 focus:ring-indigo-400"
+                    class="w-3.5 h-3.5 rounded border-slate-300 text-brand focus:ring-brand"
                     checked={showBorder}
                     onchange={(e) =>
                         updateActiveDesign({
@@ -903,9 +904,25 @@
                         keycapPositions={keycapPositionsForScene}
                         {keycapLetters}
                         keycapSvgUrls={keycapSvgUrlsForScene}
+                        snapshotReady={(fn) => {
+                            takeSnapshot = fn;
+                        }}
                     />
                 </Canvas>
             </main>
+            <button
+                type="button"
+                class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
+                title="Save snapshot (front + top view)"
+                aria-label="Save snapshot (front and top view)"
+                onclick={() => takeSnapshot?.()}
+            >
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                    <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                    <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
+                </svg>
+            </button>
             <button
                 type="button"
                 class="absolute bottom-4 right-4 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-red-600 hover:border-red-200 touch-manipulation z-[50] {designs.length <=
@@ -940,14 +957,14 @@
             </button>
         </div>
         <div
-            class="flex-shrink-0 flex items-center gap-1 px-2 py-2 md:px-3 md:py-2.5 bg-slate-100 border-t border-slate-200 overflow-x-auto"
+            class="flex-shrink-0 flex items-center gap-1 px-2 py-2 md:px-3 md:py-2.5 bg-surface border-t border-brand-border overflow-x-auto"
         >
             {#each designs as design, i (design.id)}
                 <button
                     type="button"
                     class="flex-shrink-0 py-1 px-2 rounded-md border touch-manipulation min-h-[44px] md:min-h-0 text-[13px] font-medium whitespace-nowrap {i ===
                     activeIndex
-                        ? 'bg-indigo-500 border-indigo-500 text-white'
+                        ? 'bg-brand border-brand text-white'
                         : 'bg-white border-slate-200 text-slate-500 hover:text-slate-800'}"
                     onclick={() => (activeIndex = i)}
                     title={design.name}

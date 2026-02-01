@@ -1,5 +1,15 @@
 @import "tailwindcss";
 
+/* Theme based on logo: pink–purple–blue gradient, dark purple text (#663399), medium blue (#3366CC) */
+@theme {
+    --color-brand: #663399;
+    --color-brand-hover: #552288;
+    --color-brand-light: #f3eef9;
+    --color-brand-muted: #9966cc;
+    --color-brand-border: #c4b5e0;
+    --color-surface: #faf8fc; /* very light lavender for bars */
+}
+
 html,
 body {
     height: 100%;

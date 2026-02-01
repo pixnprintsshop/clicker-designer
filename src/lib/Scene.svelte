@@ -1,7 +1,18 @@
 <script lang="ts">
-    import { T, useLoader } from "@threlte/core";
+    import { T, useLoader, useThrelte } from "@threlte/core";
     import { Grid, OrbitControls } from "@threlte/extras";
-    import { Color, ExtrudeGeometry, Vector3 } from "three";
+    import {
+        Box3,
+        Color,
+        ExtrudeGeometry,
+        Mesh,
+        PerspectiveCamera,
+        type Scene as ThreeScene,
+        SRGBColorSpace,
+        Vector3,
+        type WebGLRenderer,
+        WebGLRenderTarget,
+    } from "three";
     import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
     import { FontLoader } from "three/addons/loaders/FontLoader.js";
     import { STLLoader } from "three/addons/loaders/STLLoader.js";
@@ -48,6 +59,8 @@
         textSizeMm?: number;
         /** Text Y offset in mm above keycap top (for dev/debug). */
         textYOffsetMm?: number;
+        /** Called with takeSnapshot() when scene is ready for snapshots. */
+        snapshotReady?: (takeSnapshot: () => void) => void;
     }
     let {
         objectColor = "#ec4899",
@@ -59,7 +72,191 @@
         keycapLetters = [],
         keycapSvgUrls = [],
         textSizeMm = 8,
+        snapshotReady,
     }: Props = $props();
+
+    const threlte = useThrelte();
+    const SNAPSHOT_SIZE = 1536;
+    const FOV_DEG = 45;
+    /** Max size of a mesh's bbox to include in framing (exclude huge grid). */
+    const MAX_MESH_SIZE = 150;
+
+    /** Same gray background as live T.Scene. */
+    const SNAPSHOT_BG = new Color("#d4d4d4");
+
+    function captureView(
+        renderer: WebGLRenderer,
+        scene: ThreeScene,
+        position: [number, number, number],
+        target: [number, number, number]
+    ): Uint8Array {
+        const rt = new WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE);
+        rt.texture.colorSpace = SRGBColorSpace;
+        const cam = new PerspectiveCamera(FOV_DEG, 1, 1, 2000);
+        cam.position.set(...position);
+        cam.lookAt(target[0], target[1], target[2]);
+        cam.updateMatrixWorld(true);
+        scene.updateMatrixWorld(true);
+        const prevClearColor = renderer.getClearColor(new Color());
+        const prevClearAlpha = renderer.getClearAlpha();
+        renderer.setClearColor(
+            scene.background instanceof Color ? scene.background : SNAPSHOT_BG
+        );
+        renderer.setClearAlpha(1);
+        renderer.setRenderTarget(rt);
+        renderer.clear();
+        renderer.render(scene, cam);
+        const pixels = new Uint8Array(SNAPSHOT_SIZE * SNAPSHOT_SIZE * 4);
+        renderer.readRenderTargetPixels(
+            rt,
+            0,
+            0,
+            SNAPSHOT_SIZE,
+            SNAPSHOT_SIZE,
+            pixels
+        );
+        renderer.setRenderTarget(null);
+        renderer.setClearColor(prevClearColor);
+        renderer.setClearAlpha(prevClearAlpha);
+        rt.dispose();
+        return pixels;
+    }
+
+    function pixelsToDataUrl(
+        pixels: Uint8Array,
+        width: number,
+        height: number
+    ): string {
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return "";
+        const imageData = ctx.createImageData(width, height);
+        for (let y = 0; y < height; y++) {
+            for (let x = 0; x < width; x++) {
+                const src = (height - 1 - y) * width * 4 + x * 4;
+                const dst = y * width * 4 + x * 4;
+                imageData.data[dst] = pixels[src];
+                imageData.data[dst + 1] = pixels[src + 1];
+                imageData.data[dst + 2] = pixels[src + 2];
+                imageData.data[dst + 3] = pixels[src + 3];
+            }
+        }
+        ctx.putImageData(imageData, 0, 0);
+        return canvas.toDataURL("image/png");
+    }
+
+    /** Compute bounding box of model meshes (exclude grid and other huge geometry). */
+    function getModelBox(scene: ThreeScene): {
+        center: Vector3;
+        size: Vector3;
+        maxDim: number;
+    } {
+        const box = new Box3();
+        scene.traverse((obj) => {
+            if (obj instanceof Mesh && obj.geometry) {
+                obj.geometry.computeBoundingBox();
+                const geomBox = obj.geometry.boundingBox;
+                if (!geomBox) return;
+                const dim = Math.max(
+                    geomBox.max.x - geomBox.min.x,
+                    geomBox.max.y - geomBox.min.y,
+                    geomBox.max.z - geomBox.min.z
+                );
+                if (dim > MAX_MESH_SIZE) return;
+                obj.updateMatrixWorld(true);
+                const worldBox = geomBox.clone().applyMatrix4(obj.matrixWorld);
+                box.union(worldBox);
+            }
+        });
+        const center = new Vector3();
+        const size = new Vector3();
+        box.getCenter(center);
+        box.getSize(size);
+        const maxDim = Math.max(size.x, size.y, size.z) || 80;
+        return { center, size, maxDim };
+    }
+
+    /** Camera distance so the whole model fits in view (fov in deg). */
+    function distanceToFit(
+        maxDim: number,
+        fovDeg: number,
+        margin = 1.4
+    ): number {
+        const halfFovRad = (fovDeg / 2) * (Math.PI / 180);
+        return (maxDim / 2 / Math.tan(halfFovRad)) * margin;
+    }
+
+    function takeSnapshot(): void {
+        const renderer = threlte.renderer;
+        const scene = threlte.scene;
+        const camera = threlte.camera;
+        if (!renderer || !scene || !camera) return;
+
+        const { center, maxDim } = getModelBox(scene);
+        const cx = center.x;
+        const cy = center.y;
+        const cz = center.z;
+        const dist = distanceToFit(maxDim, FOV_DEG);
+
+        const frontPixels = captureView(
+            renderer,
+            scene,
+            [cx, cy, cz + dist],
+            [cx, cy, cz]
+        );
+        const topPixels = captureView(
+            renderer,
+            scene,
+            [cx, cy + dist, cz],
+            [cx, cy, cz]
+        );
+
+        const frontDataUrl = pixelsToDataUrl(
+            frontPixels,
+            SNAPSHOT_SIZE,
+            SNAPSHOT_SIZE
+        );
+        const topDataUrl = pixelsToDataUrl(
+            topPixels,
+            SNAPSHOT_SIZE,
+            SNAPSHOT_SIZE
+        );
+
+        const composite = document.createElement("canvas");
+        composite.width = SNAPSHOT_SIZE;
+        composite.height = SNAPSHOT_SIZE * 2;
+        const ctx = composite.getContext("2d");
+        if (!ctx) return;
+        const frontImg = new Image();
+        frontImg.onload = () => {
+            ctx.drawImage(frontImg, 0, 0, SNAPSHOT_SIZE, SNAPSHOT_SIZE);
+            const topImg = new Image();
+            topImg.onload = () => {
+                ctx.drawImage(
+                    topImg,
+                    0,
+                    SNAPSHOT_SIZE,
+                    SNAPSHOT_SIZE,
+                    SNAPSHOT_SIZE
+                );
+                const dataUrl = composite.toDataURL("image/png");
+                const a = document.createElement("a");
+                a.download = `clicker-snapshot-${Date.now()}.png`;
+                a.href = dataUrl;
+                a.click();
+            };
+            topImg.src = topDataUrl;
+        };
+        frontImg.src = frontDataUrl;
+    }
+
+    $effect(() => {
+        if (threlte.renderer && threlte.scene && threlte.camera) {
+            snapshotReady?.(takeSnapshot);
+        }
+    });
 
     /** Scene units = mm (1 unit = 1 mm). If STL is in meters, use 1000; if STL is already in mm, use 1. */
     const FILE_TO_MM = 1;
@@ -414,7 +611,7 @@
             >
                 <T.MeshStandardMaterial
                     color={keycapColor}
-                    roughness={0.3}
+                    roughness={0.5}
                     envMapIntensity={0.4}
                 />
             </T.Mesh>
