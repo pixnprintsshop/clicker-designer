@@ -70,6 +70,7 @@
     let deleteConfirmIndex = $state(/** @type {number | null} */ (null));
     let sidebarOpen = $state(false);
     let takeSnapshot = $state(/** @type {(() => void) | null} */ (null));
+    let showSnapshotThankYou = $state(false);
 
     const WELCOME_SESSION_KEY = "clicker-designer-welcome-seen";
     let showWelcome = $state(
@@ -241,10 +242,17 @@
                     />
                     <h2
                         id="welcome-title"
-                        class="m-0 mb-3 text-xl font-bold text-slate-800"
+                        class="m-0 mb-1 text-xl font-bold text-slate-800"
                     >
-                        Clicker Designer
+                        Fidget Clicker Designer
+                        <br />
                     </h2>
+                    <span class="text-sm text-slate-500">by</span>
+                    <img
+                        src="/pixnprints-logo.png"
+                        alt="PixnPrints logo"
+                        class="h-10 object-contain mb-4"
+                    />
                     <p class="m-0 mb-5 text-sm text-slate-500 leading-snug">
                         Design your custom clicker keychains. Choose colors, add
                         letters or icons to each key, and create multiple
@@ -669,6 +677,49 @@
         </div>
     {/if}
 
+    <!-- Snapshot thank-you dialog (after download) -->
+    {#if showSnapshotThankYou}
+        <div
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="snapshot-thankyou-title"
+            tabindex="-1"
+            onclick={() => (showSnapshotThankYou = false)}
+            onkeydown={(e) => {
+                if (e.key === "Escape") showSnapshotThankYou = false;
+            }}
+        >
+            <div
+                class="bg-white rounded-xl shadow-2xl w-full max-w-md p-6"
+                role="document"
+                tabindex="-1"
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.key === "Escape" && (showSnapshotThankYou = false)}
+            >
+                <h3
+                    id="snapshot-thankyou-title"
+                    class="m-0 mb-3 text-lg font-semibold text-slate-800"
+                >
+                    Thank you for using Clicker Designer
+                </h3>
+                <p class="m-0 mb-3 text-sm text-slate-600 leading-snug">
+                    Your snapshot has been saved. Check your <strong>Downloads</strong> folder (or <strong>Photos / Gallery</strong> on mobile) for the image.
+                </p>
+                <p class="m-0 mb-5 text-sm text-slate-600 leading-snug">
+                    When you order your fidget clicker from <strong>PixnPrints</strong>, share this design so we can personalize it for you.
+                </p>
+                <button
+                    type="button"
+                    class="w-full py-3 px-4 text-sm font-semibold text-white bg-brand rounded-lg hover:bg-brand-hover touch-manipulation min-h-[44px]"
+                    onclick={() => (showSnapshotThankYou = false)}
+                >
+                    Got it
+                </button>
+            </div>
+        </div>
+    {/if}
+
     <!-- Delete design confirmation (outside sidebar so it overlays viewport) -->
     {#if deleteConfirmIndex !== null}
         <div
@@ -907,6 +958,9 @@
                         snapshotReady={(fn) => {
                             takeSnapshot = fn;
                         }}
+                        onSnapshotDownloaded={() => {
+                            showSnapshotThankYou = true;
+                        }}
                     />
                 </Canvas>
             </main>
@@ -917,8 +971,19 @@
                 aria-label="Save snapshot (front and top view)"
                 onclick={() => takeSnapshot?.()}
             >
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                    <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                >
+                    <path
+                        d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                    />
                     <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
                 </svg>

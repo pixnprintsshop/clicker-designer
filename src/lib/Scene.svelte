@@ -61,6 +61,8 @@
         textYOffsetMm?: number;
         /** Called with takeSnapshot() when scene is ready for snapshots. */
         snapshotReady?: (takeSnapshot: () => void) => void;
+        /** Called after the snapshot file download has been triggered. */
+        onSnapshotDownloaded?: () => void;
     }
     let {
         objectColor = "#ec4899",
@@ -73,6 +75,7 @@
         keycapSvgUrls = [],
         textSizeMm = 8,
         snapshotReady,
+        onSnapshotDownloaded,
     }: Props = $props();
 
     const threlte = useThrelte();
@@ -246,6 +249,7 @@
                 a.download = `clicker-snapshot-${Date.now()}.png`;
                 a.href = dataUrl;
                 a.click();
+                onSnapshotDownloaded?.();
             };
             topImg.src = topDataUrl;
         };
