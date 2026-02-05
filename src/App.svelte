@@ -25,7 +25,7 @@
 
     function createDefaultDesign(
         /** @type {string} */ name,
-        /** @type {import("./lib/configStorage.js").StoredConfig | null | undefined} */ fromSaved = undefined
+        /** @type {import("./lib/configStorage.js").StoredConfig | null | undefined} */ fromSaved = undefined,
     ) {
         const raw = fromSaved && typeof fromSaved === "object" ? fromSaved : {};
         const from =
@@ -60,7 +60,7 @@
         : [createDefaultDesign("Design 1", saved ?? undefined)];
     const initialActive = Math.min(
         Math.max(0, saved?.activeIndex ?? 0),
-        initialDesigns.length - 1
+        initialDesigns.length - 1,
     );
 
     let designs = $state([...initialDesigns]);
@@ -75,7 +75,7 @@
     const WELCOME_SESSION_KEY = "clicker-designer-welcome-seen";
     let showWelcome = $state(
         typeof sessionStorage !== "undefined" &&
-            !sessionStorage.getItem(WELCOME_SESSION_KEY)
+            !sessionStorage.getItem(WELCOME_SESSION_KEY),
     );
     function closeWelcome() {
         try {
@@ -87,7 +87,7 @@
     const activeDesign = $derived(designs[activeIndex] ?? designs[0]);
 
     function updateActiveDesign(
-        /** @type {Partial<import("./lib/configStorage.js").StoredDesign>} */ patch
+        /** @type {Partial<import("./lib/configStorage.js").StoredDesign>} */ patch,
     ) {
         const i = activeIndex;
         if (i < 0 || i >= designs.length) return;
@@ -98,7 +98,7 @@
     const objectColor = $derived(activeDesign?.objectColor ?? "#ec4899");
     const keycapColor = $derived(activeDesign?.keycapColor ?? "#6366f1");
     const textBorderColor = $derived(
-        activeDesign?.textBorderColor ?? "#1f2937"
+        activeDesign?.textBorderColor ?? "#1f2937",
     );
     const showBorder = $derived(activeDesign?.showBorder !== false);
     const keycapPositions = $derived(
@@ -107,21 +107,21 @@
             getDefaultPositions(numberOfKeys)
         ).map((/** @type {{ x: number; y: number; z: number }} */ p) => ({
             ...p,
-        }))
+        })),
     );
     const keycapLetters = $derived(
         (
             activeDesign?.keycapLettersByCount?.[String(numberOfKeys)] ??
             Array(numberOfKeys).fill("")
         ).map((/** @type {string} */ c) =>
-            typeof c === "string" ? c.slice(0, 1) : ""
-        )
+            typeof c === "string" ? c.slice(0, 1) : "",
+        ),
     );
     const keycapSvg = $derived(
         (
             activeDesign?.keycapSvgByCount?.[String(numberOfKeys)] ??
             Array(numberOfKeys).fill(null)
-        ).map((/** @type {string | null} */ s) => s ?? null)
+        ).map((/** @type {string | null} */ s) => s ?? null),
     );
 
     $effect(() => {
@@ -132,15 +132,15 @@
     const keycapPositionsForScene = $derived(
         keycapPositions.map(
             (/** @type {{ x: number; y: number; z: number }} */ p) =>
-                /** @type {[number, number, number]} */ ([p.x, p.y, p.z])
-        )
+                /** @type {[number, number, number]} */ ([p.x, p.y, p.z]),
+        ),
     );
 
     /** Per-keycap SVG URL or null; passed to Scene for rendering. */
     const keycapSvgUrlsForScene = $derived(
         keycapSvg.map((/** @type {string | null} */ id) =>
-            id ? (SVG_URL_BY_ID.get(id) ?? null) : null
-        )
+            id ? (SVG_URL_BY_ID.get(id) ?? null) : null,
+        ),
     );
 
     function addDesign() {
@@ -187,7 +187,7 @@
     /** Preset palette: specific colors only (grid in popover) */
     const COLOR_PALETTE = [
         "#ffffff", // White
-        "#35a1be", // Blue
+        "#5dadfa", // Blue
         "#db6a7e", // Pink
         "#3d1590", // Purple
         "#83ed64", // Green
@@ -617,8 +617,8 @@
                                 const next = keycapSvg.map(
                                     (
                                         /** @type {string | null} */ s,
-                                        /** @type {number} */ j
-                                    ) => (j === svgPickerKeyIndex ? null : s)
+                                        /** @type {number} */ j,
+                                    ) => (j === svgPickerKeyIndex ? null : s),
                                 );
                                 updateActiveDesign({
                                     keycapSvgByCount: {
@@ -649,11 +649,11 @@
                                     const next = keycapSvg.map(
                                         (
                                             /** @type {string | null} */ s,
-                                            /** @type {number} */ j
+                                            /** @type {number} */ j,
                                         ) =>
                                             j === svgPickerKeyIndex
                                                 ? asset.id
-                                                : s
+                                                : s,
                                     );
                                     updateActiveDesign({
                                         keycapSvgByCount: {
@@ -695,7 +695,8 @@
                 role="document"
                 tabindex="-1"
                 onclick={(e) => e.stopPropagation()}
-                onkeydown={(e) => e.key === "Escape" && (showSnapshotThankYou = false)}
+                onkeydown={(e) =>
+                    e.key === "Escape" && (showSnapshotThankYou = false)}
             >
                 <h3
                     id="snapshot-thankyou-title"
@@ -704,10 +705,16 @@
                     Thank you for using Clicker Designer
                 </h3>
                 <p class="m-0 mb-3 text-sm text-slate-600 leading-snug">
-                    Your snapshot has been saved. Check your <strong>Downloads</strong> folder (or <strong>Photos / Gallery</strong> on mobile) for the image.
+                    Your snapshot has been saved. Check your <strong
+                        >Downloads</strong
+                    >
+                    folder (or <strong>Photos / Gallery</strong> on mobile) for the
+                    image.
                 </p>
                 <p class="m-0 mb-5 text-sm text-slate-600 leading-snug">
-                    When you order your fidget clicker from <strong>PixnPrints</strong>, share this design so we can personalize it for you.
+                    When you order your fidget clicker from <strong
+                        >PixnPrints</strong
+                    >, share this design so we can personalize it for you.
                 </p>
                 <button
                     type="button"
@@ -820,8 +827,8 @@
                                     const next = keycapLetters.map(
                                         (
                                             /** @type {string} */ l,
-                                            /** @type {number} */ j
-                                        ) => (j === i ? v : l)
+                                            /** @type {number} */ j,
+                                        ) => (j === i ? v : l),
                                     );
                                     updateActiveDesign({
                                         keycapLettersByCount: {
@@ -843,7 +850,7 @@
                             {#if keycapSvg[i]}
                                 <img
                                     src={SVG_ASSETS.find(
-                                        (a) => a.id === keycapSvg[i]
+                                        (a) => a.id === keycapSvg[i],
                                     )?.url}
                                     alt=""
                                     class="w-full h-full object-contain"
@@ -884,7 +891,7 @@
                 aria-label="Base color"
                 onclick={(e) => {
                     const popover = document.getElementById(
-                        "object-color-popover"
+                        "object-color-popover",
                     );
                     if (popover?.showPopover) {
                         popover.showPopover();
@@ -900,7 +907,7 @@
                 aria-label="Keycaps color"
                 onclick={(e) => {
                     const popover = document.getElementById(
-                        "keycap-color-popover"
+                        "keycap-color-popover",
                     );
                     if (popover?.showPopover) {
                         popover.showPopover();
@@ -916,7 +923,7 @@
                 aria-label="Legend color"
                 onclick={(e) => {
                     const popover = document.getElementById(
-                        "text-border-color-popover"
+                        "text-border-color-popover",
                     );
                     if (popover?.showPopover) {
                         popover.showPopover();
