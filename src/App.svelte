@@ -1,9 +1,9 @@
 <script>
-    import { NoToneMapping } from "three";
     import { Canvas } from "@threlte/core";
+    import { NoToneMapping } from "three";
     import Scene from "./lib/Scene.svelte";
-    import { KEYCAP_POSITIONS } from "./lib/keycapPositions.js";
     import { loadConfig, saveConfig } from "./lib/configStorage.js";
+    import { KEYCAP_POSITIONS } from "./lib/keycapPositions.js";
     import { SVG_ASSETS, SVG_URL_BY_ID } from "./lib/svgAssets.js";
 
     /**
@@ -71,6 +71,9 @@
     let sidebarOpen = $state(false);
     let takeSnapshot = $state(/** @type {(() => void) | null} */ (null));
     let showSnapshotThankYou = $state(false);
+    let exportKeycapStl = $state(
+        /** @type {((keycapIndex?: number) => void) | null} */ (null),
+    );
 
     const WELCOME_SESSION_KEY = "clicker-designer-welcome-seen";
     let showWelcome = $state(
@@ -184,27 +187,72 @@
         });
     }
 
+    /**
+     * Color name map corresponding to COLOR_PALETTE.
+     *
+     * Add/change names as desired.
+     */
+    const COLOR_NAMES = [
+        "Black",
+        "White",
+        "Dark Blue",
+        "Blue",
+        "Pink",
+        "Peach Pink",
+        "Purple",
+        "Green",
+        "Dark Green",
+        "Matcha Green",
+        "Yellow",
+        "Orange",
+        "Red",
+        "Magenta",
+        "Brick Red",
+        "Very Peri",
+        "Beige",
+        "Brown",
+        "Grey",
+    ];
+
     /** Preset palette: specific colors only (grid in popover) */
     const COLOR_PALETTE = [
+        "#000000", // black
         "#ffffff", // White
-        "#5dadfa", // Blue
+        "#5dadfa", // Dark Blue
+        "#141f41", // Blue
         "#db6a7e", // Pink
+        "#ce9596", // Peach Pink
         "#3d1590", // Purple
         "#83ed64", // Green
-        "#ffeb47", // Yellow
         "#023020", // Dark Green
+        "#acb26d", // Matcha Green
+        "#ffeb47", // Yellow
         "#f5541b", // Orange
         "#d23724", // Red
+        "#c22856", // Magenta
+        "#722427", // Brick Red
         "#7174c0", // Very Peri
         "#d9b99b", // Beige
         "#623411", // Brown
         "#686c6f", // Grey
     ];
+
+    // --- 1. Hovered color index state
+    /** @type {number | null} */
+    let hoveredColorIndex = $state(/** @type {number | null} */ (null));
+    /**
+     * @param {number} idx
+     * @returns {void}
+     */
+    function handleColorHover(idx) {
+        hoveredColorIndex = idx;
+    }
+    function handleColorLeave() {
+        hoveredColorIndex = null;
+    }
 </script>
 
-<div
-    class="flex flex-col md:flex-row w-full h-full min-h-[100dvh] overflow-hidden"
->
+<div class="flex flex-col md:flex-row w-full h-full min-h-dvh overflow-hidden">
     <!-- Mobile sidebar backdrop -->
     <button
         type="button"
@@ -386,16 +434,18 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex}
+                    {#each COLOR_PALETTE as hex, idx}
                         <button
                             type="button"
-                            class="w-7 h-7 p-0 rounded-md border-2 border-transparent cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {objectColor ===
+                            class="w-7 h-7 p-0 border border-gray-300 rounded-md cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {objectColor ===
                             hex
                                 ? 'border-slate-800 ring-1 ring-white ring-inset'
                                 : ''}"
                             style="background-color: {hex};"
                             title={hex}
                             aria-label="Color {hex}"
+                            onmouseenter={() => handleColorHover(idx)}
+                            onmouseleave={handleColorLeave}
                             onclick={() => {
                                 updateActiveDesign({ objectColor: hex });
                                 document
@@ -412,6 +462,14 @@
                         </button>
                     {/each}
                 </div>
+                {#if hoveredColorIndex !== null}
+                    <div class="pt-2 text-center">
+                        <span
+                            class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
+                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                        >
+                    </div>
+                {/if}
             </div>
         </div>
         <div class="flex flex-col gap-2">
@@ -444,16 +502,18 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex}
+                    {#each COLOR_PALETTE as hex, idx}
                         <button
                             type="button"
-                            class="w-7 h-7 p-0 rounded-md border-2 border-transparent cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {keycapColor ===
+                            class="w-7 h-7 p-0 border border-gray-300 rounded-md cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {keycapColor ===
                             hex
                                 ? 'border-slate-800 ring-1 ring-white ring-inset'
                                 : ''}"
                             style="background-color: {hex};"
                             title={hex}
                             aria-label="Color {hex}"
+                            onmouseenter={() => handleColorHover(idx)}
+                            onmouseleave={handleColorLeave}
                             onclick={() => {
                                 updateActiveDesign({ keycapColor: hex });
                                 document
@@ -470,6 +530,14 @@
                         </button>
                     {/each}
                 </div>
+                {#if hoveredColorIndex !== null}
+                    <div class="pt-2 text-center">
+                        <span
+                            class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
+                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                        >
+                    </div>
+                {/if}
             </div>
         </div>
         <div class="flex flex-col gap-2">
@@ -502,7 +570,7 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex}
+                    {#each COLOR_PALETTE as hex, idx}
                         <button
                             type="button"
                             class="w-7 h-7 p-0 rounded-md border-2 border-transparent cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {textBorderColor ===
@@ -512,6 +580,8 @@
                             style="background-color: {hex};"
                             title={hex}
                             aria-label="Color {hex}"
+                            onmouseenter={() => handleColorHover(idx)}
+                            onmouseleave={handleColorLeave}
                             onclick={() => {
                                 updateActiveDesign({ textBorderColor: hex });
                                 document
@@ -528,6 +598,14 @@
                         </button>
                     {/each}
                 </div>
+                {#if hoveredColorIndex !== null}
+                    <div class="pt-2 text-center">
+                        <span
+                            class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
+                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                        >
+                    </div>
+                {/if}
             </div>
         </div>
         <label
@@ -968,12 +1046,16 @@
                         onSnapshotDownloaded={() => {
                             showSnapshotThankYou = true;
                         }}
+                        exportKeycapStlReady={(fn) => {
+                            exportKeycapStl = fn;
+                        }}
+                        onKeycapStlDownloaded={() => {}}
                     />
                 </Canvas>
             </main>
             <button
                 type="button"
-                class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
+                class="absolute bottom-4 right-32 md:right-28 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
                 title="Save snapshot (front + top view)"
                 aria-label="Save snapshot (front and top view)"
                 onclick={() => takeSnapshot?.()}
@@ -993,6 +1075,28 @@
                     />
                     <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                     <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
+                </svg>
+            </button>
+            <button
+                type="button"
+                class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
+                title="Download keycap STL (one file per keycap: keycap + border + letter/SVG)"
+                aria-label="Download keycap STL"
+                onclick={() => exportKeycapStl?.()}
+            >
+                <svg
+                    class="w-5 h-5"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                >
+                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4" />
+                    <path d="M7 10l5 5 5-5" />
+                    <path d="M12 15V3" />
                 </svg>
             </button>
             <button

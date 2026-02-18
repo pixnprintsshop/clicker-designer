@@ -1,10 +1,12 @@
 <script lang="ts">
+    import { get } from "svelte/store";
     import { T, useLoader, useThrelte } from "@threlte/core";
     import { Grid, OrbitControls } from "@threlte/extras";
     import {
         Box3,
         Color,
         ExtrudeGeometry,
+        Group,
         Mesh,
         PerspectiveCamera,
         type Scene as ThreeScene,
@@ -14,6 +16,7 @@
         WebGLRenderTarget,
     } from "three";
     import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
+    import { STLExporter } from "three/addons/exporters/STLExporter.js";
     import { FontLoader } from "three/addons/loaders/FontLoader.js";
     import { STLLoader } from "three/addons/loaders/STLLoader.js";
     import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
@@ -63,6 +66,12 @@
         snapshotReady?: (takeSnapshot: () => void) => void;
         /** Called after the snapshot file download has been triggered. */
         onSnapshotDownloaded?: () => void;
+        /** Called with exportKeycapStl(keycapIndex?) when scene is ready to export keycap STL(s). */
+        exportKeycapStlReady?: (
+            exportKeycapStl: (keycapIndex?: number) => void,
+        ) => void;
+        /** Called after keycap STL file(s) download has been triggered. */
+        onKeycapStlDownloaded?: () => void;
     }
     let {
         objectColor = "#ec4899",
@@ -76,6 +85,8 @@
         textSizeMm = 8,
         snapshotReady,
         onSnapshotDownloaded,
+        exportKeycapStlReady,
+        onKeycapStlDownloaded,
     }: Props = $props();
 
     const threlte = useThrelte();
@@ -91,7 +102,7 @@
         renderer: WebGLRenderer,
         scene: ThreeScene,
         position: [number, number, number],
-        target: [number, number, number]
+        target: [number, number, number],
     ): Uint8Array {
         const rt = new WebGLRenderTarget(SNAPSHOT_SIZE, SNAPSHOT_SIZE);
         rt.texture.colorSpace = SRGBColorSpace;
@@ -103,7 +114,7 @@
         const prevClearColor = renderer.getClearColor(new Color());
         const prevClearAlpha = renderer.getClearAlpha();
         renderer.setClearColor(
-            scene.background instanceof Color ? scene.background : SNAPSHOT_BG
+            scene.background instanceof Color ? scene.background : SNAPSHOT_BG,
         );
         renderer.setClearAlpha(1);
         renderer.setRenderTarget(rt);
@@ -116,7 +127,7 @@
             0,
             SNAPSHOT_SIZE,
             SNAPSHOT_SIZE,
-            pixels
+            pixels,
         );
         renderer.setRenderTarget(null);
         renderer.setClearColor(prevClearColor);
@@ -128,7 +139,7 @@
     function pixelsToDataUrl(
         pixels: Uint8Array,
         width: number,
-        height: number
+        height: number,
     ): string {
         const canvas = document.createElement("canvas");
         canvas.width = width;
@@ -165,7 +176,7 @@
                 const dim = Math.max(
                     geomBox.max.x - geomBox.min.x,
                     geomBox.max.y - geomBox.min.y,
-                    geomBox.max.z - geomBox.min.z
+                    geomBox.max.z - geomBox.min.z,
                 );
                 if (dim > MAX_MESH_SIZE) return;
                 obj.updateMatrixWorld(true);
@@ -185,7 +196,7 @@
     function distanceToFit(
         maxDim: number,
         fovDeg: number,
-        margin = 1.4
+        margin = 1.4,
     ): number {
         const halfFovRad = (fovDeg / 2) * (Math.PI / 180);
         return (maxDim / 2 / Math.tan(halfFovRad)) * margin;
@@ -207,24 +218,24 @@
             renderer,
             scene,
             [cx, cy, cz + dist],
-            [cx, cy, cz]
+            [cx, cy, cz],
         );
         const topPixels = captureView(
             renderer,
             scene,
             [cx, cy + dist, cz],
-            [cx, cy, cz]
+            [cx, cy, cz],
         );
 
         const frontDataUrl = pixelsToDataUrl(
             frontPixels,
             SNAPSHOT_SIZE,
-            SNAPSHOT_SIZE
+            SNAPSHOT_SIZE,
         );
         const topDataUrl = pixelsToDataUrl(
             topPixels,
             SNAPSHOT_SIZE,
-            SNAPSHOT_SIZE
+            SNAPSHOT_SIZE,
         );
 
         const composite = document.createElement("canvas");
@@ -242,7 +253,7 @@
                     0,
                     SNAPSHOT_SIZE,
                     SNAPSHOT_SIZE,
-                    SNAPSHOT_SIZE
+                    SNAPSHOT_SIZE,
                 );
                 const dataUrl = composite.toDataURL("image/png");
                 const a = document.createElement("a");
@@ -262,10 +273,142 @@
         }
     });
 
+    const stlExporter = new STLExporter();
+
+    /**
+     * Export one or all keycaps as STL (keycap + border + letter/SVG) and trigger download.
+     * @param keycapIndex - If set, export only this keycap (0-based). Otherwise export all keycaps as separate files.
+     */
+    function exportKeycapStl(keycapIndex?: number) {
+        const keycapGeom = get(keycapGeometryStore);
+        const borderGeom = get(borderGeometryStore);
+        if (!keycapGeom) return;
+        const positions = keycapMeshPositions;
+        const borderPositions = borderMeshPositions;
+        const indices =
+            keycapIndex !== undefined
+                ? [keycapIndex]
+                : positions.map((_, i) => i);
+        const scaleMm = FILE_TO_MM;
+        // Use positive scale so normals stay outward (negative scale makes STL non-solid in slicers)
+        const textScaleXY = textSizeMm * scaleMm;
+        const textScaleZ = LEGEND_DEPTH_MM * scaleMm;
+        for (const i of indices) {
+            if (i >= positions.length) continue;
+            const group = new Group();
+            // Keycap mesh (same transform as in scene)
+            const keycapMesh = new Mesh(keycapGeom.clone());
+            keycapMesh.position.set(
+                positions[i][0],
+                positions[i][1],
+                positions[i][2],
+            );
+            keycapMesh.scale.setScalar(scaleMm);
+            keycapMesh.rotation.x = -Math.PI / 2;
+            group.add(keycapMesh);
+            // Border mesh
+            if (showBorder && borderGeom && i < borderPositions.length) {
+                const borderMesh = new Mesh(borderGeom.clone());
+                borderMesh.position.set(
+                    borderPositions[i][0],
+                    borderPositions[i][1],
+                    borderPositions[i][2],
+                );
+                borderMesh.scale.setScalar(scaleMm);
+                borderMesh.rotation.x = -Math.PI / 2;
+                group.add(borderMesh);
+            }
+            // Label: text or SVG
+            const letter = keycapLetters[i]?.trim();
+            const svgUrl = keycapSvgUrls[i]?.trim();
+            if (svgUrl && svgGeometryByUrl[svgUrl]) {
+                const slotPos = (() => {
+                    const [x, y, z] = keycapPositions[i];
+                    const keycapBottomY = clickerTopY + y - keycapOffset.minZ;
+                    const keycapTopY =
+                        keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
+                    return [x, keycapTopY, z] as [number, number, number];
+                })();
+                const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
+                svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
+                svgMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
+                svgMesh.rotation.x = Math.PI / 2;
+                group.add(svgMesh);
+            } else if (letter && font) {
+                const geom = new TextGeometry(
+                    letter.toUpperCase().slice(0, 1),
+                    {
+                        font,
+                        size: 1,
+                        depth: LEGEND_DEPTH_MM / textSizeMm,
+                        curveSegments: 6,
+                        bevelEnabled: false,
+                    },
+                );
+                geom.computeBoundingBox();
+                const box = geom.boundingBox;
+                if (box) {
+                    const center = new Vector3();
+                    box.getCenter(center);
+                    geom.translate(-center.x, -center.y, -center.z);
+                }
+                const [x, y, z] = (() => {
+                    const [px, py, pz] = keycapPositions[i];
+                    const keycapBottomY = clickerTopY + py - keycapOffset.minZ;
+                    const keycapTopY =
+                        keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
+                    return [px, keycapTopY, pz] as [number, number, number];
+                })();
+                const textMesh = new Mesh(geom);
+                textMesh.position.set(x, y, z);
+                textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
+                textMesh.rotation.x = Math.PI / 2;
+                textMesh.rotation.z = Math.PI; // same orientation as display, keeps normals outward
+                group.add(textMesh);
+            }
+            group.updateMatrixWorld(true);
+            // Slicers (Bambu Studio, etc.) expect Z-up; our scene is Y-up. Rotate so model imports upright.
+            const root = new Group();
+            root.rotation.x = Math.PI / 2;
+            root.add(group);
+            root.updateMatrixWorld(true);
+            const stlData = stlExporter.parse(root, { binary: true });
+            const blob = new Blob([stlData], {
+                type: "application/octet-stream",
+            });
+            const name =
+                letter && !svgUrl
+                    ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
+                    : `keycap-${i + 1}.stl`;
+            const a = document.createElement("a");
+            a.href = URL.createObjectURL(blob);
+            a.download = name;
+            a.click();
+            URL.revokeObjectURL(a.href);
+            // Dispose geometries we created or cloned
+            group.traverse((obj) => {
+                if (obj instanceof Mesh) obj.geometry.dispose();
+            });
+            root.remove(group);
+        }
+        onKeycapStlDownloaded?.();
+    }
+
+    $effect(() => {
+        // Subscribe reactively so we run again when the loader finishes
+        const keycapGeom = $keycapGeometryStore;
+        if (keycapGeom) {
+            exportKeycapStlReady?.(exportKeycapStl);
+        }
+    });
+
     /** Scene units = mm (1 unit = 1 mm). If STL is in meters, use 1000; if STL is already in mm, use 1. */
     const FILE_TO_MM = 1;
 
-    /** Extrusion depth for SVG (same proportion as text depth). */
+    /** Extrusion depth in mm for letter and logo (same height for both). */
+    const LEGEND_DEPTH_MM = 1.2;
+
+    /** Extrusion depth for SVG geometry (before normalize); normalized depth becomes 1. */
     const SVG_EXTRUDE_DEPTH = 2;
 
     const { load } = useLoader(STLLoader);
@@ -279,7 +422,7 @@
     const keycapPositions = $derived(
         keycapPositionsProp?.length
             ? keycapPositionsProp
-            : (KEYCAP_POSITIONS[keyIndex] ?? [])
+            : (KEYCAP_POSITIONS[keyIndex] ?? []),
     );
 
     /**
@@ -328,7 +471,7 @@
                 minZ: box.min.z,
                 maxZ: box.max.z,
             };
-        }
+        },
     );
 
     /** Final keycap mesh positions: centered at (pos[0], clickerTopY + pos[1], pos[2]), bottom on clicker when pos[1]=0. */
@@ -356,7 +499,7 @@
                 center: [center.x, center.y, center.z],
                 minZ: box.min.z,
             };
-        }
+        },
     );
     const keycapHeight = $derived(keycapOffset.maxZ - keycapOffset.minZ);
     /** Border mesh positions: same logic as text — one per keycap, centered at keycap world (x,z), bottom on keycap top Y. */
@@ -417,13 +560,13 @@
                 })
                 .filter(
                     (
-                        x
+                        x,
                     ): x is {
                         position: [number, number, number];
                         url: string;
-                    } => x != null
+                    } => x != null,
                 );
-        }
+        },
     );
 
     /** Load SVG URLs into extruded geometries (no background, shape only). */
@@ -475,10 +618,18 @@
                                 size.x,
                                 size.y,
                                 size.z,
-                                0.001
+                                0.001,
                             );
                             const scale = 1 / maxDim;
                             merged.scale(scale, scale, scale);
+                            // Normalize depth to 1 so mesh scale Z = LEGEND_DEPTH_MM gives same height as letter
+                            merged.computeBoundingBox();
+                            box = merged.boundingBox;
+                            if (box) {
+                                const zSize = box.max.z - box.min.z;
+                                if (zSize > 0.001)
+                                    merged.scale(1, 1, 1 / zSize);
+                            }
                         }
                     }
                     svgGeometryByUrl = { ...svgGeometryByUrl, [url]: merged };
@@ -511,10 +662,10 @@
                         {
                             font: f,
                             size: 1,
-                            depth: 0.1,
+                            depth: LEGEND_DEPTH_MM / textSizeMm,
                             curveSegments: 6,
                             bevelEnabled: false,
-                        }
+                        },
                     );
                     geom.computeBoundingBox();
                     const box = geom.boundingBox;
@@ -540,7 +691,7 @@
                     };
                 })
                 .filter((x): x is NonNullable<typeof x> => x != null);
-        }
+        },
     );
 </script>
 
@@ -662,7 +813,7 @@
                 scale={[
                     textSizeMm * FILE_TO_MM,
                     textSizeMm * FILE_TO_MM,
-                    textSizeMm * FILE_TO_MM,
+                    LEGEND_DEPTH_MM * FILE_TO_MM,
                 ]}
                 rotation.x={Math.PI / 2}
             >
