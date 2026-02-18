@@ -221,13 +221,13 @@
         "#ffffff", // White
         "#5dadfa", // Dark Blue
         "#141f41", // Blue
-        "#db6a7e", // Pink
-        "#ce9596", // Peach Pink
+        "#ff7e94", // Pink
+        "#eeb9ba", // Peach Pink
         "#3d1590", // Purple
         "#83ed64", // Green
-        "#023020", // Dark Green
+        "#03452e", // Dark Green
         "#acb26d", // Matcha Green
-        "#76caa0", // Min Green
+        "#9bf5c8", // Min Green
         "#ffeb47", // Yellow
         "#f5541b", // Orange
         "#d23724", // Red
