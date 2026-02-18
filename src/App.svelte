@@ -203,6 +203,7 @@
         "Green",
         "Dark Green",
         "Matcha Green",
+        "Min Green",
         "Yellow",
         "Orange",
         "Red",
@@ -226,6 +227,7 @@
         "#83ed64", // Green
         "#023020", // Dark Green
         "#acb26d", // Matcha Green
+        "#76caa0", // Min Green
         "#ffeb47", // Yellow
         "#f5541b", // Orange
         "#d23724", // Red
