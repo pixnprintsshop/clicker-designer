@@ -69,6 +69,7 @@
     let svgPickerOpen = $derived(svgPickerKeyIndex !== null);
     let deleteConfirmIndex = $state(/** @type {number | null} */ (null));
     let sidebarOpen = $state(false);
+    let presetModalOpen = $state(false);
     let takeSnapshot = $state(/** @type {(() => void) | null} */ (null));
     let showSnapshotThankYou = $state(false);
     let exportKeycapStl = $state(
@@ -238,6 +239,187 @@
         "#623411", // Brown
         "#686c6f", // Grey
     ];
+
+    /** Preset color combinations for the gallery (name + base, keycap, legend). */
+    const PRESET_GALLERY = [
+        {
+            name: "Classic Pink",
+            objectColor: "#ff7e94",
+            keycapColor: "#ffffff",
+            textBorderColor: "#1f2937",
+        },
+        {
+            name: "Ocean",
+            objectColor: "#5dadfa",
+            keycapColor: "#141f41",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Forest",
+            objectColor: "#03452e",
+            keycapColor: "#83ed64",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Sunset",
+            objectColor: "#f5541b",
+            keycapColor: "#ffeb47",
+            textBorderColor: "#722427",
+        },
+        {
+            name: "Lavender",
+            objectColor: "#7174c0",
+            keycapColor: "#e8e8ff",
+            textBorderColor: "#3d1590",
+        },
+        {
+            name: "Rose",
+            objectColor: "#c22856",
+            keycapColor: "#eeb9ba",
+            textBorderColor: "#722427",
+        },
+        {
+            name: "Mint",
+            objectColor: "#9bf5c8",
+            keycapColor: "#03452e",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Neutral",
+            objectColor: "#686c6f",
+            keycapColor: "#d9b99b",
+            textBorderColor: "#623411",
+        },
+        {
+            name: "Bold Red",
+            objectColor: "#d23724",
+            keycapColor: "#000000",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Pure White",
+            objectColor: "#ffffff",
+            keycapColor: "#f1f5f9",
+            textBorderColor: "#475569",
+        },
+        {
+            name: "Dark",
+            objectColor: "#141f41",
+            keycapColor: "#686c6f",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Matcha",
+            objectColor: "#acb26d",
+            keycapColor: "#03452e",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Navy & Gold",
+            objectColor: "#141f41",
+            keycapColor: "#ffeb47",
+            textBorderColor: "#141f41",
+        },
+        {
+            name: "Berry",
+            objectColor: "#3d1590",
+            keycapColor: "#eeb9ba",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Coral",
+            objectColor: "#eeb9ba",
+            keycapColor: "#ffffff",
+            textBorderColor: "#722427",
+        },
+        {
+            name: "Chocolate",
+            objectColor: "#623411",
+            keycapColor: "#d9b99b",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Cherry",
+            objectColor: "#d23724",
+            keycapColor: "#ffffff",
+            textBorderColor: "#141f41",
+        },
+        {
+            name: "Plum",
+            objectColor: "#3d1590",
+            keycapColor: "#c22856",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Lime",
+            objectColor: "#9bf5c8",
+            keycapColor: "#83ed64",
+            textBorderColor: "#03452e",
+        },
+        {
+            name: "Tangerine",
+            objectColor: "#f5541b",
+            keycapColor: "#ffffff",
+            textBorderColor: "#722427",
+        },
+        {
+            name: "Storm",
+            objectColor: "#686c6f",
+            keycapColor: "#141f41",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Honey",
+            objectColor: "#d9b99b",
+            keycapColor: "#ffeb47",
+            textBorderColor: "#623411",
+        },
+        {
+            name: "Black & Mint",
+            objectColor: "#000000",
+            keycapColor: "#9bf5c8",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Blush",
+            objectColor: "#eeb9ba",
+            keycapColor: "#c22856",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Cream & Brown",
+            objectColor: "#d9b99b",
+            keycapColor: "#623411",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Pink & Navy",
+            objectColor: "#ff7e94",
+            keycapColor: "#141f41",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Brick & Cream",
+            objectColor: "#722427",
+            keycapColor: "#d9b99b",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Periwinkle Deep",
+            objectColor: "#7174c0",
+            keycapColor: "#3d1590",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Midnight",
+            objectColor: "#000000",
+            keycapColor: "#141f41",
+            textBorderColor: "#ffeb47",
+        },
+    ];
+
+    /** Index in PRESET_GALLERY for syncing when applying from gallery (sidebar or modal). */
+    let lastPresetIndex = $state(0);
 
     // --- 1. Hovered color index state
     /** @type {number | null} */
@@ -626,6 +808,57 @@
             />
         </label>
 
+        <div class="flex flex-col gap-2">
+            <span class="text-[13px] font-medium text-slate-700"
+                >Preset gallery</span
+            >
+            <p class="text-[11px] text-slate-500 m-0">
+                Click a preset to apply its colors.
+            </p>
+            <div class="grid grid-cols-3 gap-2">
+                {#each PRESET_GALLERY as preset, idx}
+                    <button
+                        type="button"
+                        class="flex flex-col items-stretch rounded-lg border-2 overflow-hidden cursor-pointer touch-manipulation transition-all hover:scale-[1.02] hover:border-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 {objectColor ===
+                            preset.objectColor &&
+                        keycapColor === preset.keycapColor &&
+                        textBorderColor === preset.textBorderColor
+                            ? 'border-brand ring-1 ring-brand ring-offset-1'
+                            : 'border-slate-200'}"
+                        title={preset.name}
+                        aria-label="Apply preset {preset.name}"
+                        onclick={() => {
+                            lastPresetIndex = idx;
+                            updateActiveDesign({
+                                objectColor: preset.objectColor,
+                                keycapColor: preset.keycapColor,
+                                textBorderColor: preset.textBorderColor,
+                            });
+                        }}
+                    >
+                        <div class="flex h-10 border-b border-slate-200">
+                            <span
+                                class="flex-1 min-w-0"
+                                style="background-color: {preset.objectColor};"
+                            ></span>
+                            <span
+                                class="flex-1 min-w-0"
+                                style="background-color: {preset.keycapColor};"
+                            ></span>
+                            <span
+                                class="flex-1 min-w-0"
+                                style="background-color: {preset.textBorderColor};"
+                            ></span>
+                        </div>
+                        <span
+                            class="text-[8px] font-medium text-slate-600 py-1.5 px-1 truncate bg-slate-50"
+                            >{preset.name}</span
+                        >
+                    </button>
+                {/each}
+            </div>
+        </div>
+
         <!-- <h2 class="sidebar-title">Keycap positions (mm)</h2>
         <p class="sidebar-hint">X/Z = position. Y = offset from clicker top (0 = on clicker). Copy into <code>keycapPositions.ts</code>.</p>
         {#each keycapPositions as pos, i}
@@ -648,6 +881,86 @@
             </div>
         {/each} -->
     </aside>
+
+    <!-- Preset gallery modal (mobile: choose preset, closes on select) -->
+    {#if presetModalOpen}
+        <div
+            class="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40"
+            role="presentation"
+            onclick={() => (presetModalOpen = false)}
+        >
+            <div
+                class="bg-white rounded-xl shadow-2xl w-full max-w-[360px] max-h-[85dvh] flex flex-col overflow-hidden"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Choose preset"
+                tabindex="-1"
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => {
+                    if (e.key === "Escape") presetModalOpen = false;
+                }}
+            >
+                <div
+                    class="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0"
+                >
+                    <h3 class="m-0 text-[15px] font-semibold text-slate-800">
+                        Choose preset
+                    </h3>
+                    <button
+                        type="button"
+                        class="w-8 h-8 flex items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-700 text-2xl leading-none touch-manipulation"
+                        aria-label="Close"
+                        onclick={() => (presetModalOpen = false)}
+                    >
+                        ×
+                    </button>
+                </div>
+                <div class="grid grid-cols-3 gap-2 p-4 overflow-y-auto">
+                    {#each PRESET_GALLERY as preset, idx}
+                        <button
+                            type="button"
+                            class="flex flex-col items-stretch rounded-lg border-2 overflow-hidden cursor-pointer touch-manipulation transition-all hover:scale-[1.02] hover:border-brand focus:outline-none focus:ring-2 focus:ring-brand focus:ring-offset-1 {objectColor ===
+                                preset.objectColor &&
+                            keycapColor === preset.keycapColor &&
+                            textBorderColor === preset.textBorderColor
+                                ? 'border-brand ring-1 ring-brand ring-offset-1'
+                                : 'border-slate-200'}"
+                            title={preset.name}
+                            aria-label="Apply preset {preset.name}"
+                            onclick={() => {
+                                lastPresetIndex = idx;
+                                updateActiveDesign({
+                                    objectColor: preset.objectColor,
+                                    keycapColor: preset.keycapColor,
+                                    textBorderColor: preset.textBorderColor,
+                                });
+                                presetModalOpen = false;
+                            }}
+                        >
+                            <div class="flex h-10 border-b border-slate-200">
+                                <span
+                                    class="flex-1 min-w-0"
+                                    style="background-color: {preset.objectColor};"
+                                ></span>
+                                <span
+                                    class="flex-1 min-w-0"
+                                    style="background-color: {preset.keycapColor};"
+                                ></span>
+                                <span
+                                    class="flex-1 min-w-0"
+                                    style="background-color: {preset.textBorderColor};"
+                                ></span>
+                            </div>
+                            <span
+                                class="text-[8px] font-medium text-slate-600 py-1.5 px-1 truncate bg-slate-50"
+                                >{preset.name}</span
+                            >
+                        </button>
+                    {/each}
+                </div>
+            </div>
+        </div>
+    {/if}
 
     <!-- SVG picker modal (outside sidebar so it overlays viewport) -->
     {#if svgPickerOpen}
@@ -894,11 +1207,13 @@
                                 >Key {i + 1}</span
                             >
                             <input
+                                id="letter-input-{i}"
                                 type="text"
                                 class="w-8 h-8 md:w-9 md:h-9 p-0 text-sm md:text-base text-center uppercase border border-slate-200 rounded bg-white touch-manipulation aspect-square"
                                 maxlength="1"
                                 placeholder=""
                                 value={letter}
+                                onfocus={(e) => e.currentTarget?.select()}
                                 oninput={(e) => {
                                     const v = (
                                         e.currentTarget?.value ?? ""
@@ -916,11 +1231,21 @@
                                             [numberOfKeys]: next,
                                         },
                                     });
+                                    if (v && i + 1 < keycapLetters.length) {
+                                        requestAnimationFrame(() => {
+                                            document
+                                                .getElementById(
+                                                    `letter-input-${i + 1}`,
+                                                )
+                                                ?.focus();
+                                        });
+                                    }
                                 }}
                                 aria-label="Letter for key {i + 1}"
                             />
                         </label>
                         <button
+                            tabindex="-1"
                             type="button"
                             class="w-8 h-8 md:h-9 md:w-9 flex items-center justify-center p-1 border border-slate-200 rounded-md bg-white hover:border-brand hover:bg-brand-light touch-manipulation min-h-[30px] md:min-h-0"
                             title="Pick SVG icon"
@@ -949,6 +1274,29 @@
         <div
             class="md:hidden flex-shrink-0 flex items-center justify-center gap-3 px-3 py-2 bg-brand-light/60 border-b border-brand-border flex-wrap"
         >
+            <button
+                type="button"
+                class="flex items-center gap-2 h-9 px-3 rounded-lg border border-slate-300 bg-white text-slate-700 text-sm font-medium hover:bg-slate-50 touch-manipulation shrink-0"
+                aria-label="Choose preset"
+                title="Choose preset"
+                onclick={() => (presetModalOpen = true)}
+            >
+                <span class="flex gap-0.5">
+                    <span
+                        class="w-3 h-3 rounded-sm border border-slate-300 shrink-0"
+                        style="background-color: {objectColor};"
+                    ></span>
+                    <span
+                        class="w-3 h-3 rounded-sm border border-slate-300 shrink-0"
+                        style="background-color: {keycapColor};"
+                    ></span>
+                    <span
+                        class="w-3 h-3 rounded-sm border border-slate-300 shrink-0"
+                        style="background-color: {textBorderColor};"
+                    ></span>
+                </span>
+                Preset
+            </button>
             <select
                 class="h-8 min-w-[3rem] px-2 text-sm border border-slate-300 rounded-lg bg-white text-slate-700 cursor-pointer touch-manipulation"
                 value={numberOfKeys}
