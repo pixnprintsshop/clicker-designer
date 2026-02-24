@@ -11,6 +11,8 @@ export interface StoredDesign {
     keycapPositionsByCount?: Record<string, { x: number; y: number; z: number }[]>;
     keycapLettersByCount?: Record<string, string[]>;
     keycapSvgByCount?: Record<string, (string | null)[]>;
+    /** SVG size on keycap in mm (width and height, aspect ratio kept). */
+    keycapSvgSizeMm?: number;
 }
 
 export interface StoredConfig {

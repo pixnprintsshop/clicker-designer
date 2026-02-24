@@ -58,6 +58,8 @@
         keycapLetters?: string[];
         /** Per-keycap SVG URL or null; when set, SVG is rendered instead of letter. */
         keycapSvgUrls?: (string | null)[];
+        /** SVG size on keycap in mm (uniform width & height, aspect ratio kept). */
+        keycapSvgSizeMm?: number;
         /** Text label size in mm (for dev/debug). */
         textSizeMm?: number;
         /** Text Y offset in mm above keycap top (for dev/debug). */
@@ -82,6 +84,7 @@
         keycapPositions: keycapPositionsProp,
         keycapLetters = [],
         keycapSvgUrls = [],
+        keycapSvgSizeMm = 8,
         textSizeMm = 8,
         snapshotReady,
         onSnapshotDownloaded,
@@ -331,7 +334,11 @@
                 })();
                 const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
                 svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
-                svgMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
+                svgMesh.scale.set(
+                    keycapSvgSizeMm * scaleMm,
+                    keycapSvgSizeMm * scaleMm,
+                    textScaleZ,
+                );
                 svgMesh.rotation.x = Math.PI / 2;
                 group.add(svgMesh);
             } else if (letter && font) {
@@ -811,8 +818,8 @@
                 position={slot.position}
                 geometry={svgGeometryByUrl[slot.url]}
                 scale={[
-                    textSizeMm * FILE_TO_MM,
-                    textSizeMm * FILE_TO_MM,
+                    keycapSvgSizeMm * FILE_TO_MM,
+                    keycapSvgSizeMm * FILE_TO_MM,
                     LEGEND_DEPTH_MM * FILE_TO_MM,
                 ]}
                 rotation.x={Math.PI / 2}

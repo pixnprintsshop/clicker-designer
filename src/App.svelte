@@ -51,6 +51,7 @@
             keycapSvgByCount: hasExistingSvg
                 ? from.keycapSvgByCount
                 : { [String(n)]: Array(n).fill(DEFAULT_KEYCAP_SVG_ID) },
+            keycapSvgSizeMm: from.keycapSvgSizeMm ?? 8,
         };
     }
 
@@ -127,6 +128,8 @@
             Array(numberOfKeys).fill(null)
         ).map((/** @type {string | null} */ s) => s ?? null),
     );
+    const keycapSvgSizeMm = $derived(activeDesign?.keycapSvgSizeMm ?? 8);
+    const hasAnySvg = $derived(keycapSvg.some((s) => !!s));
 
     $effect(() => {
         if (!activeDesign) return;
@@ -808,6 +811,45 @@
             />
         </label>
 
+        {#if hasAnySvg}
+            <div class="flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <span class="text-[13px] font-medium text-slate-700"
+                        >SVG size (mm)</span
+                    >
+                    <span
+                        class="text-[13px] tabular-nums text-slate-600"
+                        aria-hidden="true"
+                        >{keycapSvgSizeMm}</span
+                    >
+                </div>
+                <p class="text-[11px] text-slate-500 m-0">
+                    Uniform scale; aspect ratio is kept.
+                </p>
+                <input
+                    type="range"
+                    min="1"
+                    max="30"
+                    step="0.5"
+                    class="w-full h-2 accent-brand cursor-pointer touch-manipulation"
+                    value={keycapSvgSizeMm}
+                    oninput={(e) => {
+                        const v = parseFloat(
+                            e.currentTarget?.value ?? "8",
+                        );
+                        if (!Number.isNaN(v))
+                            updateActiveDesign({
+                                keycapSvgSizeMm: Math.max(
+                                    1,
+                                    Math.min(30, v),
+                                ),
+                            });
+                    }}
+                    aria-label="SVG size in mm"
+                />
+            </div>
+        {/if}
+
         <div class="flex flex-col gap-2">
             <span class="text-[13px] font-medium text-slate-700"
                 >Preset gallery</span
@@ -1390,6 +1432,7 @@
                         keycapPositions={keycapPositionsForScene}
                         {keycapLetters}
                         keycapSvgUrls={keycapSvgUrlsForScene}
+                        keycapSvgSizeMm={keycapSvgSizeMm}
                         snapshotReady={(fn) => {
                             takeSnapshot = fn;
                         }}
