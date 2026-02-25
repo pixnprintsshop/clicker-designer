@@ -1099,7 +1099,7 @@
                             <img
                                 src={asset.url}
                                 alt=""
-                                class="w-5 h-5 object-contain"
+                                class="w-6 h-6 object-contain"
                             />
                         </button>
                     {/each}
