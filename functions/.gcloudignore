@@ -1,0 +1,12 @@
+# Don't upload local inputs/outputs or run script to the build
+input.png
+input.svg
+output.svg
+run.sh
+__temp_*
+*.pyc
+__pycache__
+.git
+.gitignore
+.env
+*.md
