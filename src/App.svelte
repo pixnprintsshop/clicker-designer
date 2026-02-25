@@ -819,8 +819,7 @@
                     >
                     <span
                         class="text-[13px] tabular-nums text-slate-600"
-                        aria-hidden="true"
-                        >{keycapSvgSizeMm}</span
+                        aria-hidden="true">{keycapSvgSizeMm}</span
                     >
                 </div>
                 <p class="text-[11px] text-slate-500 m-0">
@@ -834,15 +833,10 @@
                     class="w-full h-2 accent-brand cursor-pointer touch-manipulation"
                     value={keycapSvgSizeMm}
                     oninput={(e) => {
-                        const v = parseFloat(
-                            e.currentTarget?.value ?? "8",
-                        );
+                        const v = parseFloat(e.currentTarget?.value ?? "8");
                         if (!Number.isNaN(v))
                             updateActiveDesign({
-                                keycapSvgSizeMm: Math.max(
-                                    1,
-                                    Math.min(30, v),
-                                ),
+                                keycapSvgSizeMm: Math.max(1, Math.min(30, v)),
                             });
                     }}
                     aria-label="SVG size in mm"
@@ -1039,13 +1033,14 @@
                         ×
                     </button>
                 </div>
-                <div class="grid grid-cols-4 gap-2 p-4 overflow-y-auto">
+                <div class="grid grid-cols-6 gap-1 p-2 overflow-y-auto">
                     <button
                         type="button"
-                        class="aspect-square p-2 border-2 rounded-lg bg-white cursor-pointer flex items-center justify-center text-xs text-slate-500 transition-colors touch-manipulation min-h-[44px] {svgPickerKeyIndex !==
+                        class="aspect-square p-0.5 border rounded md:rounded-lg bg-white cursor-pointer flex items-center justify-center text-[10px] text-slate-500 transition-colors touch-manipulation {svgPickerKeyIndex !==
                             null && !keycapSvg[svgPickerKeyIndex]
                             ? 'border-brand bg-brand-light text-brand'
                             : 'border-slate-200 hover:border-brand-muted hover:bg-brand-light'}"
+                        style="min-width: unset; min-height: unset;"
                         title="None"
                         onclick={() => {
                             if (svgPickerKeyIndex !== null && activeDesign) {
@@ -1070,11 +1065,12 @@
                     {#each SVG_ASSETS as asset}
                         <button
                             type="button"
-                            class="aspect-square p-2 border-2 rounded-lg bg-white cursor-pointer flex items-center justify-center transition-colors touch-manipulation min-h-[44px] {svgPickerKeyIndex !==
+                            class="aspect-square p-0.5 border rounded md:rounded-lg bg-white cursor-pointer flex items-center justify-center transition-colors touch-manipulation {svgPickerKeyIndex !==
                                 null &&
                             keycapSvg[svgPickerKeyIndex] === asset.id
                                 ? 'border-brand bg-brand-light'
                                 : 'border-slate-200 hover:border-brand-muted hover:bg-brand-light'}"
+                            style="min-width: unset; min-height: unset;"
                             title={asset.name}
                             onclick={() => {
                                 if (
@@ -1103,7 +1099,7 @@
                             <img
                                 src={asset.url}
                                 alt=""
-                                class="w-7 h-7 object-contain"
+                                class="w-5 h-5 object-contain"
                             />
                         </button>
                     {/each}
@@ -1432,7 +1428,7 @@
                         keycapPositions={keycapPositionsForScene}
                         {keycapLetters}
                         keycapSvgUrls={keycapSvgUrlsForScene}
-                        keycapSvgSizeMm={keycapSvgSizeMm}
+                        {keycapSvgSizeMm}
                         snapshotReady={(fn) => {
                             takeSnapshot = fn;
                         }}
