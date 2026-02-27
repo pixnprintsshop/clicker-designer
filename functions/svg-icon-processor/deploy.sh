@@ -7,7 +7,7 @@ export PROJECT_ID=clicker-designer
 gcloud auth configure-docker gcr.io --quiet
 
 # Build and push from the functions directory
-docker build --platform linux/amd64 -t gcr.io/$PROJECT_ID/svg-icon-processor:latest ../functions
+docker build --platform linux/amd64 -t gcr.io/$PROJECT_ID/svg-icon-processor:latest ../svg-icon-processor
 docker push gcr.io/$PROJECT_ID/svg-icon-processor:latest
 
 # Deploy pre-built image to Cloud Run (no Cloud Build needed)
