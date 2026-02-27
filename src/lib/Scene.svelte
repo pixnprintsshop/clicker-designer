@@ -84,8 +84,8 @@
         keycapPositions: keycapPositionsProp,
         keycapLetters = [],
         keycapSvgUrls = [],
-        keycapSvgSizeMm = 8,
-        textSizeMm = 8,
+        keycapSvgSizeMm = 10,
+        textSizeMm = 8.7,
         snapshotReady,
         onSnapshotDownloaded,
         exportKeycapStlReady,
@@ -295,7 +295,9 @@
         const scaleMm = FILE_TO_MM;
         // Use positive scale so normals stay outward (negative scale makes STL non-solid in slicers)
         const textScaleXY = textSizeMm * scaleMm;
-        const textScaleZ = LEGEND_DEPTH_MM * scaleMm;
+        // TextGeometry depth is LEGEND_DEPTH_MM/textSizeMm in size units; scale Z by textSizeMm so final depth = LEGEND_DEPTH_MM (same as SVG).
+        const textScaleZ = textSizeMm * scaleMm;
+        const legendDepthScaleZ = LEGEND_DEPTH_MM * scaleMm; // for SVG (geometry depth already 1)
         for (const i of indices) {
             if (i >= positions.length) continue;
             const group = new Group();
@@ -337,9 +339,10 @@
                 svgMesh.scale.set(
                     keycapSvgSizeMm * scaleMm,
                     keycapSvgSizeMm * scaleMm,
-                    textScaleZ,
+                    legendDepthScaleZ,
                 );
                 svgMesh.rotation.x = Math.PI / 2;
+                svgMesh.rotation.y = Math.PI; // correct X flip in exported STL (Z-up conversion)
                 group.add(svgMesh);
             } else if (letter && font) {
                 const geom = new TextGeometry(
@@ -371,6 +374,7 @@
                 textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
                 textMesh.rotation.x = Math.PI / 2;
                 textMesh.rotation.z = Math.PI; // same orientation as display, keeps normals outward
+                textMesh.rotation.y = Math.PI; // correct X flip in exported STL (Z-up conversion)
                 group.add(textMesh);
             }
             group.updateMatrixWorld(true);
