@@ -1,0 +1,9 @@
+# Don't upload local inputs/outputs or run script to the build
+*.stl
+run.sh
+*.pyc
+__pycache__
+.git
+.gitignore
+.env
+*.md
