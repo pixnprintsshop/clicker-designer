@@ -1,4 +1,5 @@
 <script>
+    import { onMount } from "svelte";
     import { Canvas } from "@threlte/core";
     import { NoToneMapping } from "three";
     import Scene from "./lib/Scene.svelte";
@@ -76,6 +77,20 @@
     let exportKeycapStl = $state(
         /** @type {((keycapIndex?: number) => void) | null} */ (null),
     );
+
+    /** Show STL download FAB only when URL has ?download=1 */
+    let showDownloadButton = $state(false);
+    onMount(() => {
+        const syncDownloadParam = () => {
+            showDownloadButton =
+                new URLSearchParams(window.location.search).get("download") ===
+                "1";
+        };
+        syncDownloadParam();
+        window.addEventListener("popstate", syncDownloadParam);
+        return () =>
+            window.removeEventListener("popstate", syncDownloadParam);
+    });
 
     const WELCOME_SESSION_KEY = "clicker-designer-welcome-seen";
     let showWelcome = $state(
@@ -191,56 +206,30 @@
         });
     }
 
-    /**
-     * Color name map corresponding to COLOR_PALETTE.
-     *
-     * Add/change names as desired.
-     */
-    const COLOR_NAMES = [
-        "Black",
-        "White",
-        "Dark Blue",
-        "Blue",
-        "Pink",
-        "Peach Pink",
-        "Purple",
-        "Green",
-        "Dark Green",
-        "Matcha Green",
-        "Min Green",
-        "Yellow",
-        "Orange",
-        "Red",
-        "Magenta",
-        "Brick Red",
-        "Very Peri",
-        "Beige",
-        "Brown",
-        "Grey",
-    ];
-
     /** Preset palette: specific colors only (grid in popover) */
     const COLOR_PALETTE = [
-        "#000000", // black
-        "#ffffff", // White
-        "#5dadfa", // Dark Blue
-        "#141f41", // Blue
-        "#ff7e94", // Pink
-        "#eeb9ba", // Peach Pink
-        "#3d1590", // Purple
-        "#83ed64", // Green
-        "#03452e", // Dark Green
-        "#acb26d", // Matcha Green
-        "#9bf5c8", // Min Green
-        "#ffeb47", // Yellow
-        "#f5541b", // Orange
-        "#d23724", // Red
-        "#c22856", // Magenta
-        "#722427", // Brick Red
-        "#7174c0", // Very Peri
-        "#d9b99b", // Beige
-        "#623411", // Brown
-        "#686c6f", // Grey
+        { color: "#000000", name: "Black" },
+        { color: "#ffffff", name: "White" },
+        { color: "#5dadfa", name: "Blue" },
+        { color: "#0d18a8", name: "Navy" },
+        { color: "#141f41", name: "Dark Blue" },
+        { color: "#eeb9ba", name: "Peach Pink" },
+        { color: "#ff7e94", name: "Pink" },
+        { color: "#3d1590", name: "Purple" },
+        { color: "#7174c0", name: "Very Peri" },
+        { color: "#d29dcd", name: "Lilac" },
+        { color: "#9bf5c8", name: "Min Green" },
+        { color: "#83ed64", name: "Green" },
+        { color: "#acb26d", name: "Matcha Green" },
+        { color: "#03452e", name: "Dark Green" },
+        { color: "#ffeb47", name: "Yellow" },
+        { color: "#f5541b", name: "Orange" },
+        { color: "#d23724", name: "Red" },
+        { color: "#c22856", name: "Magenta" },
+        { color: "#d9b99b", name: "Beige" },
+        { color: "#623411", name: "Brown" },
+        { color: "#722427", name: "Brick Red" },
+        { color: "#686c6f", name: "Grey" },
     ];
 
     /** Preset color combinations for the gallery (name + base, keycap, legend). */
@@ -418,6 +407,60 @@
             objectColor: "#000000",
             keycapColor: "#141f41",
             textBorderColor: "#ffeb47",
+        },
+        {
+            name: "Velvet Night",
+            objectColor: "#141f41",
+            keycapColor: "#d29dcd",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Lilac Haze",
+            objectColor: "#d29dcd",
+            keycapColor: "#ffffff",
+            textBorderColor: "#141f41",
+        },
+        {
+            name: "Royal Iris",
+            objectColor: "#3d1590",
+            keycapColor: "#d29dcd",
+            textBorderColor: "#ffffff",
+        },
+        {
+            name: "Twilight Bay",
+            objectColor: "#0d18a8",
+            keycapColor: "#d29dcd",
+            textBorderColor: "#ffeb47",
+        },
+        {
+            name: "Lilac Sky",
+            objectColor: "#d29dcd",
+            keycapColor: "#5dadfa",
+            textBorderColor: "#141f41",
+        },
+        {
+            name: "Bloom on Ink",
+            objectColor: "#141f41",
+            keycapColor: "#eeb9ba",
+            textBorderColor: "#d29dcd",
+        },
+        {
+            name: "Peri Mist",
+            objectColor: "#7174c0",
+            keycapColor: "#d29dcd",
+            textBorderColor: "#141f41",
+        },
+        {
+            name: "Lilac Garden",
+            objectColor: "#d29dcd",
+            keycapColor: "#9bf5c8",
+            textBorderColor: "#03452e",
+        },
+        {
+            name: "Navy Lilac",
+            objectColor: "#0d18a8",
+            keycapColor: "#ffffff",
+            textBorderColor: "#d29dcd",
         },
     ];
 
@@ -621,26 +664,26 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex, idx}
+                    {#each COLOR_PALETTE as { color, name }, idx}
                         <button
                             type="button"
                             class="w-7 h-7 p-0 border border-gray-300 rounded-md cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {objectColor ===
-                            hex
+                            color
                                 ? 'border-slate-800 ring-1 ring-white ring-inset'
                                 : ''}"
-                            style="background-color: {hex};"
-                            title={hex}
-                            aria-label="Color {hex}"
+                            style="background-color: {color};"
+                            title="{name} ({color})"
+                            aria-label="Color {name}"
                             onmouseenter={() => handleColorHover(idx)}
                             onmouseleave={handleColorLeave}
                             onclick={() => {
-                                updateActiveDesign({ objectColor: hex });
+                                updateActiveDesign({ objectColor: color });
                                 document
                                     .getElementById("object-color-popover")
                                     ?.hidePopover?.();
                             }}
                         >
-                            {#if objectColor === hex}
+                            {#if objectColor === color}
                                 <span
                                     class="absolute inset-0 flex items-center justify-center text-sm font-bold text-white drop-shadow-sm"
                                     aria-hidden="true">✓</span
@@ -653,7 +696,7 @@
                     <div class="pt-2 text-center">
                         <span
                             class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
-                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                            >{COLOR_PALETTE[hoveredColorIndex]?.name}</span
                         >
                     </div>
                 {/if}
@@ -689,26 +732,26 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex, idx}
+                    {#each COLOR_PALETTE as { color, name }, idx}
                         <button
                             type="button"
                             class="w-7 h-7 p-0 border border-gray-300 rounded-md cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {keycapColor ===
-                            hex
+                            color
                                 ? 'border-slate-800 ring-1 ring-white ring-inset'
                                 : ''}"
-                            style="background-color: {hex};"
-                            title={hex}
-                            aria-label="Color {hex}"
+                            style="background-color: {color};"
+                            title="{name} ({color})"
+                            aria-label="Color {name}"
                             onmouseenter={() => handleColorHover(idx)}
                             onmouseleave={handleColorLeave}
                             onclick={() => {
-                                updateActiveDesign({ keycapColor: hex });
+                                updateActiveDesign({ keycapColor: color });
                                 document
                                     .getElementById("keycap-color-popover")
                                     ?.hidePopover?.();
                             }}
                         >
-                            {#if keycapColor === hex}
+                            {#if keycapColor === color}
                                 <span
                                     class="absolute inset-0 flex items-center justify-center text-sm font-bold text-white drop-shadow-sm"
                                     aria-hidden="true">✓</span
@@ -721,7 +764,7 @@
                     <div class="pt-2 text-center">
                         <span
                             class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
-                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                            >{COLOR_PALETTE[hoveredColorIndex]?.name}</span
                         >
                     </div>
                 {/if}
@@ -757,26 +800,26 @@
                 }}
             >
                 <div class="grid grid-cols-6 gap-1.5">
-                    {#each COLOR_PALETTE as hex, idx}
+                    {#each COLOR_PALETTE as { color, name }, idx}
                         <button
                             type="button"
                             class="w-7 h-7 p-0 rounded-md border-2 border-transparent cursor-pointer relative transition-all hover:scale-105 hover:border-slate-400 {textBorderColor ===
-                            hex
+                            color
                                 ? 'border-slate-800 ring-1 ring-white ring-inset'
                                 : ''}"
-                            style="background-color: {hex};"
-                            title={hex}
-                            aria-label="Color {hex}"
+                            style="background-color: {color};"
+                            title="{name} ({color})"
+                            aria-label="Color {name}"
                             onmouseenter={() => handleColorHover(idx)}
                             onmouseleave={handleColorLeave}
                             onclick={() => {
-                                updateActiveDesign({ textBorderColor: hex });
+                                updateActiveDesign({ textBorderColor: color });
                                 document
                                     .getElementById("text-border-color-popover")
                                     ?.hidePopover?.();
                             }}
                         >
-                            {#if textBorderColor === hex}
+                            {#if textBorderColor === color}
                                 <span
                                     class="absolute inset-0 flex items-center justify-center text-sm font-bold text-white drop-shadow-sm"
                                     aria-hidden="true">✓</span
@@ -789,7 +832,7 @@
                     <div class="pt-2 text-center">
                         <span
                             class="inline-block text-xs font-medium text-slate-600 px-2 py-1 bg-slate-100 rounded"
-                            >{COLOR_NAMES[hoveredColorIndex]}</span
+                            >{COLOR_PALETTE[hoveredColorIndex]?.name}</span
                         >
                     </div>
                 {/if}
@@ -1444,7 +1487,9 @@
             </main>
             <button
                 type="button"
-                class="absolute bottom-4 right-32 md:right-28 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
+                class="absolute bottom-4 {showDownloadButton
+                    ? 'right-32 md:right-28'
+                    : 'right-20 md:right-16'} w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
                 title="Save snapshot (front + top view)"
                 aria-label="Save snapshot (front and top view)"
                 onclick={() => takeSnapshot?.()}
@@ -1466,28 +1511,30 @@
                     <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
                 </svg>
             </button>
-            <button
-                type="button"
-                class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
-                title="Download keycap STL (one file per keycap: keycap + border + letter/SVG)"
-                aria-label="Download keycap STL"
-                onclick={() => exportKeycapStl?.()}
-            >
-                <svg
-                    class="w-5 h-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                    aria-hidden="true"
+            {#if showDownloadButton}
+                <button
+                    type="button"
+                    class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
+                    title="Download keycap STL (one file per keycap: keycap + border + letter/SVG)"
+                    aria-label="Download keycap STL"
+                    onclick={() => exportKeycapStl?.()}
                 >
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4" />
-                    <path d="M7 10l5 5 5-5" />
-                    <path d="M12 15V3" />
-                </svg>
-            </button>
+                    <svg
+                        class="w-5 h-5"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        aria-hidden="true"
+                    >
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4" />
+                        <path d="M7 10l5 5 5-5" />
+                        <path d="M12 15V3" />
+                    </svg>
+                </button>
+            {/if}
             <button
                 type="button"
                 class="absolute bottom-4 right-4 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-red-600 hover:border-red-200 touch-manipulation z-[50] {designs.length <=

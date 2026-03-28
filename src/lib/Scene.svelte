@@ -4,6 +4,7 @@
     import { Grid, OrbitControls } from "@threlte/extras";
     import {
         Box3,
+        BufferGeometry,
         Color,
         ExtrudeGeometry,
         Group,
@@ -342,7 +343,6 @@
                     legendDepthScaleZ,
                 );
                 svgMesh.rotation.x = Math.PI / 2;
-                svgMesh.rotation.y = Math.PI; // correct X flip in exported STL (Z-up conversion)
                 group.add(svgMesh);
             } else if (letter && font) {
                 const geom = new TextGeometry(
@@ -383,24 +383,60 @@
             root.rotation.x = Math.PI / 2;
             root.add(group);
             root.updateMatrixWorld(true);
-            const stlData = stlExporter.parse(root, { binary: true });
-            const blob = new Blob([stlData], {
-                type: "application/octet-stream",
+
+            // Merge all meshes into one and weld vertices.
+            // Note: This does not perform a true boolean union (internal faces may remain),
+            // but it's stable and avoids runtime crashes.
+            const geoms: BufferGeometry[] = [];
+            root.traverse((obj) => {
+                if (obj instanceof Mesh) {
+                    const gWorld = obj.geometry.clone();
+                    gWorld.applyMatrix4(obj.matrixWorld);
+                    // Normalize for mergeGeometries(): keep only position so attributes match across STL/Text/SVG
+                    const g = gWorld.toNonIndexed();
+                    gWorld.dispose();
+                    for (const name of Object.keys(g.attributes)) {
+                        if (name !== "position") g.deleteAttribute(name);
+                    }
+                    if (g.index) g.setIndex(null);
+                    geoms.push(g);
+                }
             });
-            const name =
-                letter && !svgUrl
-                    ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
-                    : `keycap-${i + 1}.stl`;
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(blob);
-            a.download = name;
-            a.click();
-            URL.revokeObjectURL(a.href);
+
+            let merged: BufferGeometry | null =
+                geoms.length === 0
+                    ? null
+                    : geoms.length === 1
+                        ? geoms[0]
+                        : BufferGeometryUtils.mergeGeometries(geoms);
+            if (merged) {
+                for (const g of geoms) if (g !== merged) g.dispose();
+                const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
+                if (welded !== merged) merged.dispose();
+                welded.computeVertexNormals();
+
+                const singleMesh = new Mesh(welded);
+                singleMesh.updateMatrixWorld(true);
+                const stlData = stlExporter.parse(singleMesh, { binary: true });
+                const blob = new Blob([stlData], {
+                    type: "application/octet-stream",
+                });
+                const name =
+                    letter && !svgUrl
+                        ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
+                        : `keycap-${i + 1}.stl`;
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                a.click();
+                URL.revokeObjectURL(a.href);
+                singleMesh.geometry.dispose();
+            }
+
             // Dispose geometries we created or cloned
             group.traverse((obj) => {
                 if (obj instanceof Mesh) obj.geometry.dispose();
             });
-            root.remove(group);
         }
         onKeycapStlDownloaded?.();
     }
