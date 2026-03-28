@@ -23,7 +23,10 @@
     import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
     import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
 
-    import fontUrl from "../assets/font/Daffiys_Regular.json?url";
+    import {
+        DEFAULT_KEYCAP_FONT_ID,
+        getKeycapFontOption,
+    } from "./keycapFonts";
     import borderStl from "../assets/stl/border.stl?url";
     import clicker1Stl from "../assets/stl/clicker_1.stl?url";
     import clicker2Stl from "../assets/stl/clicker_2.stl?url";
@@ -61,15 +64,23 @@
         keycapSvgUrls?: (string | null)[];
         /** SVG size on keycap in mm (uniform width & height, aspect ratio kept). */
         keycapSvgSizeMm?: number;
+        /** Three.js JSON typeface URL for keycap letters (from keycapFonts). */
+        keycapTypefaceUrl?: string;
         /** Text label size in mm (for dev/debug). */
         textSizeMm?: number;
         /** Text Y offset in mm above keycap top (for dev/debug). */
         textYOffsetMm?: number;
+        /** Human-readable names for snapshot footer (from palette or hex). */
+        snapshotBaseColorLabel?: string;
+        snapshotKeycapColorLabel?: string;
+        snapshotLegendColorLabel?: string;
+        /** Keycap letter font name for snapshot footer. */
+        snapshotKeycapFontLabel?: string;
         /** Called with takeSnapshot() when scene is ready for snapshots. */
         snapshotReady?: (takeSnapshot: () => void) => void;
         /** Called after the snapshot file download has been triggered. */
         onSnapshotDownloaded?: () => void;
-        /** Called with exportKeycapStl(keycapIndex?) when scene is ready to export keycap STL(s). */
+        /** Called with exportKeycapStl(keycapIndex?) when scene is ready to export keycap STL(s). All keys → one STL; optional index → single keycap. */
         exportKeycapStlReady?: (
             exportKeycapStl: (keycapIndex?: number) => void,
         ) => void;
@@ -86,7 +97,13 @@
         keycapLetters = [],
         keycapSvgUrls = [],
         keycapSvgSizeMm = 10,
+        keycapTypefaceUrl = getKeycapFontOption(DEFAULT_KEYCAP_FONT_ID)
+            .typefaceUrl,
         textSizeMm = 8.7,
+        snapshotBaseColorLabel = "",
+        snapshotKeycapColorLabel = "",
+        snapshotLegendColorLabel = "",
+        snapshotKeycapFontLabel = "",
         snapshotReady,
         onSnapshotDownloaded,
         exportKeycapStlReady,
@@ -95,6 +112,8 @@
 
     const threlte = useThrelte();
     const SNAPSHOT_SIZE = 1536;
+    /** Extra height below front+top panels for color name legend. */
+    const SNAPSHOT_COLOR_FOOTER_H = 268;
     const FOV_DEG = 45;
     /** Max size of a mesh's bbox to include in framing (exclude huge grid). */
     const MAX_MESH_SIZE = 150;
@@ -244,7 +263,7 @@
 
         const composite = document.createElement("canvas");
         composite.width = SNAPSHOT_SIZE;
-        composite.height = SNAPSHOT_SIZE * 2;
+        composite.height = SNAPSHOT_SIZE * 2 + SNAPSHOT_COLOR_FOOTER_H;
         const ctx = composite.getContext("2d");
         if (!ctx) return;
         const frontImg = new Image();
@@ -259,6 +278,70 @@
                     SNAPSHOT_SIZE,
                     SNAPSHOT_SIZE,
                 );
+
+                const footerY = SNAPSHOT_SIZE * 2;
+                ctx.fillStyle = "#f1f5f9";
+                ctx.fillRect(0, footerY, SNAPSHOT_SIZE, SNAPSHOT_COLOR_FOOTER_H);
+                ctx.strokeStyle = "#cbd5e1";
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, footerY + 0.5);
+                ctx.lineTo(SNAPSHOT_SIZE, footerY + 0.5);
+                ctx.stroke();
+
+                const rows: {
+                    title: string;
+                    name: string;
+                    swatch: string;
+                }[] = [
+                    {
+                        title: "Base",
+                        name: snapshotBaseColorLabel || objectColor,
+                        swatch: objectColor,
+                    },
+                    {
+                        title: "Keycaps",
+                        name: snapshotKeycapColorLabel || keycapColor,
+                        swatch: keycapColor,
+                    },
+                    {
+                        title: "Legend",
+                        name: snapshotLegendColorLabel || textBorderColor,
+                        swatch: textBorderColor,
+                    },
+                ];
+                const colW = SNAPSHOT_SIZE / 3;
+                const sw = 52;
+                const sh = 52;
+                const textY = footerY + 132;
+                ctx.textBaseline = "middle";
+                ctx.font = "600 42px system-ui, -apple-system, sans-serif";
+                for (let i = 0; i < rows.length; i++) {
+                    const { title, name, swatch } = rows[i]!;
+                    const colX = i * colW + 22;
+                    ctx.fillStyle = swatch;
+                    ctx.fillRect(colX, textY - sh / 2, sw, sh);
+                    ctx.strokeStyle = "#94a3b8";
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(colX, textY - sh / 2, sw, sh);
+                    ctx.lineWidth = 1;
+                    ctx.fillStyle = "#0f172a";
+                    const line = `${title}: ${name}`;
+                    ctx.fillText(line, colX + sw + 16, textY);
+                }
+                ctx.fillStyle = "#64748b";
+                ctx.font = "600 34px system-ui, -apple-system, sans-serif";
+                ctx.textAlign = "center";
+                ctx.fillText("Colors", SNAPSHOT_SIZE / 2, footerY + 44);
+                ctx.fillStyle = "#0f172a";
+                ctx.font = "600 40px system-ui, -apple-system, sans-serif";
+                ctx.fillText(
+                    `Letter font: ${snapshotKeycapFontLabel || "—"}`,
+                    SNAPSHOT_SIZE / 2,
+                    footerY + SNAPSHOT_COLOR_FOOTER_H - 40,
+                );
+                ctx.textAlign = "left";
+
                 const dataUrl = composite.toDataURL("image/png");
                 const a = document.createElement("a");
                 a.download = `clicker-snapshot-${Date.now()}.png`;
@@ -280,163 +363,206 @@
     const stlExporter = new STLExporter();
 
     /**
-     * Export one or all keycaps as STL (keycap + border + letter/SVG) and trigger download.
-     * @param keycapIndex - If set, export only this keycap (0-based). Otherwise export all keycaps as separate files.
+     * Build one merged BufferGeometry for keycap index i (keycap + border + legend), Z-up, caller must dispose.
+     */
+    function mergeKeycapAssemblyGeometry(i: number): BufferGeometry | null {
+        const keycapGeom = get(keycapGeometryStore);
+        const borderGeom = get(borderGeometryStore);
+        if (!keycapGeom) return null;
+        const positions = keycapMeshPositions;
+        const borderPositions = borderMeshPositions;
+        if (i >= positions.length) return null;
+
+        const scaleMm = FILE_TO_MM;
+        const textScaleXY = textSizeMm * scaleMm;
+        const textScaleZ = textSizeMm * scaleMm;
+        const legendDepthScaleZ = LEGEND_DEPTH_MM * scaleMm;
+
+        const group = new Group();
+        const keycapMesh = new Mesh(keycapGeom.clone());
+        keycapMesh.position.set(
+            positions[i][0],
+            positions[i][1],
+            positions[i][2],
+        );
+        keycapMesh.scale.setScalar(scaleMm);
+        keycapMesh.rotation.x = -Math.PI / 2;
+        group.add(keycapMesh);
+        if (showBorder && borderGeom && i < borderPositions.length) {
+            const borderMesh = new Mesh(borderGeom.clone());
+            borderMesh.position.set(
+                borderPositions[i][0],
+                borderPositions[i][1],
+                borderPositions[i][2],
+            );
+            borderMesh.scale.setScalar(scaleMm);
+            borderMesh.rotation.x = -Math.PI / 2;
+            group.add(borderMesh);
+        }
+        const letter = keycapLetters[i]?.trim();
+        const svgUrl = keycapSvgUrls[i]?.trim();
+        if (svgUrl && svgGeometryByUrl[svgUrl]) {
+            const slotPos = (() => {
+                const [x, y, z] = keycapPositions[i];
+                const keycapBottomY = clickerTopY + y - keycapOffset.minZ;
+                const keycapTopY =
+                    keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
+                return [x, keycapTopY, z] as [number, number, number];
+            })();
+            const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
+            svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
+            svgMesh.scale.set(
+                keycapSvgSizeMm * scaleMm,
+                keycapSvgSizeMm * scaleMm,
+                legendDepthScaleZ,
+            );
+            svgMesh.rotation.x = Math.PI / 2;
+            group.add(svgMesh);
+        } else if (letter && font) {
+            const geom = new TextGeometry(
+                letter.toUpperCase().slice(0, 1),
+                {
+                    font,
+                    size: 1,
+                    depth: LEGEND_DEPTH_MM / textSizeMm,
+                    curveSegments: 6,
+                    bevelEnabled: false,
+                },
+            );
+            geom.computeBoundingBox();
+            const box = geom.boundingBox;
+            if (box) {
+                const center = new Vector3();
+                box.getCenter(center);
+                geom.translate(-center.x, -center.y, -center.z);
+            }
+            const [x, y, z] = (() => {
+                const [px, py, pz] = keycapPositions[i];
+                const keycapBottomY = clickerTopY + py - keycapOffset.minZ;
+                const keycapTopY =
+                    keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
+                return [px, keycapTopY, pz] as [number, number, number];
+            })();
+            const textMesh = new Mesh(geom);
+            textMesh.position.set(x, y, z);
+            textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
+            textMesh.rotation.x = Math.PI / 2;
+            textMesh.rotation.z = Math.PI;
+            textMesh.rotation.y = Math.PI;
+            group.add(textMesh);
+        }
+        group.updateMatrixWorld(true);
+        const root = new Group();
+        root.rotation.x = Math.PI / 2;
+        root.add(group);
+        root.updateMatrixWorld(true);
+
+        const geoms: BufferGeometry[] = [];
+        root.traverse((obj) => {
+            if (obj instanceof Mesh) {
+                const gWorld = obj.geometry.clone();
+                gWorld.applyMatrix4(obj.matrixWorld);
+                const g = gWorld.toNonIndexed();
+                gWorld.dispose();
+                for (const name of Object.keys(g.attributes)) {
+                    if (name !== "position") g.deleteAttribute(name);
+                }
+                if (g.index) g.setIndex(null);
+                geoms.push(g);
+            }
+        });
+
+        let merged: BufferGeometry | null =
+            geoms.length === 0
+                ? null
+                : geoms.length === 1
+                    ? geoms[0]
+                    : BufferGeometryUtils.mergeGeometries(geoms);
+        if (!merged) {
+            group.traverse((obj) => {
+                if (obj instanceof Mesh) obj.geometry.dispose();
+            });
+            return null;
+        }
+        for (const g of geoms) if (g !== merged) g.dispose();
+        const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
+        if (welded !== merged) merged.dispose();
+        welded.computeVertexNormals();
+
+        group.traverse((obj) => {
+            if (obj instanceof Mesh) obj.geometry.dispose();
+        });
+        return welded;
+    }
+
+    function downloadStlGeometry(geometry: BufferGeometry, filename: string) {
+        const singleMesh = new Mesh(geometry);
+        singleMesh.updateMatrixWorld(true);
+        const stlData = stlExporter.parse(singleMesh, { binary: true });
+        const blob = new Blob([stlData], {
+            type: "application/octet-stream",
+        });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+        URL.revokeObjectURL(a.href);
+    }
+
+    /**
+     * Export one or all keycaps as STL (keycap + border + letter/SVG).
+     * @param keycapIndex - If set, export only this keycap (0-based). Otherwise export all keycaps in one STL when multiple keys; one file if a single key.
      */
     function exportKeycapStl(keycapIndex?: number) {
         const keycapGeom = get(keycapGeometryStore);
-        const borderGeom = get(borderGeometryStore);
         if (!keycapGeom) return;
         const positions = keycapMeshPositions;
-        const borderPositions = borderMeshPositions;
         const indices =
             keycapIndex !== undefined
                 ? [keycapIndex]
                 : positions.map((_, i) => i);
-        const scaleMm = FILE_TO_MM;
-        // Use positive scale so normals stay outward (negative scale makes STL non-solid in slicers)
-        const textScaleXY = textSizeMm * scaleMm;
-        // TextGeometry depth is LEGEND_DEPTH_MM/textSizeMm in size units; scale Z by textSizeMm so final depth = LEGEND_DEPTH_MM (same as SVG).
-        const textScaleZ = textSizeMm * scaleMm;
-        const legendDepthScaleZ = LEGEND_DEPTH_MM * scaleMm; // for SVG (geometry depth already 1)
-        for (const i of indices) {
-            if (i >= positions.length) continue;
-            const group = new Group();
-            // Keycap mesh (same transform as in scene)
-            const keycapMesh = new Mesh(keycapGeom.clone());
-            keycapMesh.position.set(
-                positions[i][0],
-                positions[i][1],
-                positions[i][2],
-            );
-            keycapMesh.scale.setScalar(scaleMm);
-            keycapMesh.rotation.x = -Math.PI / 2;
-            group.add(keycapMesh);
-            // Border mesh
-            if (showBorder && borderGeom && i < borderPositions.length) {
-                const borderMesh = new Mesh(borderGeom.clone());
-                borderMesh.position.set(
-                    borderPositions[i][0],
-                    borderPositions[i][1],
-                    borderPositions[i][2],
-                );
-                borderMesh.scale.setScalar(scaleMm);
-                borderMesh.rotation.x = -Math.PI / 2;
-                group.add(borderMesh);
-            }
-            // Label: text or SVG
+
+        const exportOne = (i: number) => {
+            const welded = mergeKeycapAssemblyGeometry(i);
+            if (!welded) return;
             const letter = keycapLetters[i]?.trim();
             const svgUrl = keycapSvgUrls[i]?.trim();
-            if (svgUrl && svgGeometryByUrl[svgUrl]) {
-                const slotPos = (() => {
-                    const [x, y, z] = keycapPositions[i];
-                    const keycapBottomY = clickerTopY + y - keycapOffset.minZ;
-                    const keycapTopY =
-                        keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
-                    return [x, keycapTopY, z] as [number, number, number];
-                })();
-                const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
-                svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
-                svgMesh.scale.set(
-                    keycapSvgSizeMm * scaleMm,
-                    keycapSvgSizeMm * scaleMm,
-                    legendDepthScaleZ,
-                );
-                svgMesh.rotation.x = Math.PI / 2;
-                group.add(svgMesh);
-            } else if (letter && font) {
-                const geom = new TextGeometry(
-                    letter.toUpperCase().slice(0, 1),
-                    {
-                        font,
-                        size: 1,
-                        depth: LEGEND_DEPTH_MM / textSizeMm,
-                        curveSegments: 6,
-                        bevelEnabled: false,
-                    },
-                );
-                geom.computeBoundingBox();
-                const box = geom.boundingBox;
-                if (box) {
-                    const center = new Vector3();
-                    box.getCenter(center);
-                    geom.translate(-center.x, -center.y, -center.z);
-                }
-                const [x, y, z] = (() => {
-                    const [px, py, pz] = keycapPositions[i];
-                    const keycapBottomY = clickerTopY + py - keycapOffset.minZ;
-                    const keycapTopY =
-                        keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
-                    return [px, keycapTopY, pz] as [number, number, number];
-                })();
-                const textMesh = new Mesh(geom);
-                textMesh.position.set(x, y, z);
-                textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
-                textMesh.rotation.x = Math.PI / 2;
-                textMesh.rotation.z = Math.PI; // same orientation as display, keeps normals outward
-                textMesh.rotation.y = Math.PI; // correct X flip in exported STL (Z-up conversion)
-                group.add(textMesh);
+            const name =
+                letter && !svgUrl
+                    ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
+                    : `keycap-${i + 1}.stl`;
+            downloadStlGeometry(welded, name);
+            welded.dispose();
+        };
+
+        if (keycapIndex !== undefined) {
+            exportOne(keycapIndex);
+        } else if (indices.length <= 1) {
+            if (indices.length === 1) exportOne(indices[0]!);
+        } else {
+            const parts: BufferGeometry[] = [];
+            for (const i of indices) {
+                if (i >= positions.length) continue;
+                const g = mergeKeycapAssemblyGeometry(i);
+                if (g) parts.push(g);
             }
-            group.updateMatrixWorld(true);
-            // Slicers (Bambu Studio, etc.) expect Z-up; our scene is Y-up. Rotate so model imports upright.
-            const root = new Group();
-            root.rotation.x = Math.PI / 2;
-            root.add(group);
-            root.updateMatrixWorld(true);
-
-            // Merge all meshes into one and weld vertices.
-            // Note: This does not perform a true boolean union (internal faces may remain),
-            // but it's stable and avoids runtime crashes.
-            const geoms: BufferGeometry[] = [];
-            root.traverse((obj) => {
-                if (obj instanceof Mesh) {
-                    const gWorld = obj.geometry.clone();
-                    gWorld.applyMatrix4(obj.matrixWorld);
-                    // Normalize for mergeGeometries(): keep only position so attributes match across STL/Text/SVG
-                    const g = gWorld.toNonIndexed();
-                    gWorld.dispose();
-                    for (const name of Object.keys(g.attributes)) {
-                        if (name !== "position") g.deleteAttribute(name);
-                    }
-                    if (g.index) g.setIndex(null);
-                    geoms.push(g);
-                }
-            });
-
-            let merged: BufferGeometry | null =
-                geoms.length === 0
-                    ? null
-                    : geoms.length === 1
-                        ? geoms[0]
-                        : BufferGeometryUtils.mergeGeometries(geoms);
-            if (merged) {
-                for (const g of geoms) if (g !== merged) g.dispose();
-                const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
-                if (welded !== merged) merged.dispose();
-                welded.computeVertexNormals();
-
-                const singleMesh = new Mesh(welded);
-                singleMesh.updateMatrixWorld(true);
-                const stlData = stlExporter.parse(singleMesh, { binary: true });
-                const blob = new Blob([stlData], {
-                    type: "application/octet-stream",
-                });
-                const name =
-                    letter && !svgUrl
-                        ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
-                        : `keycap-${i + 1}.stl`;
-                const a = document.createElement("a");
-                a.href = URL.createObjectURL(blob);
-                a.download = name;
-                a.click();
-                URL.revokeObjectURL(a.href);
-                singleMesh.geometry.dispose();
+            if (parts.length === 0) {
+                onKeycapStlDownloaded?.();
+                return;
             }
-
-            // Dispose geometries we created or cloned
-            group.traverse((obj) => {
-                if (obj instanceof Mesh) obj.geometry.dispose();
-            });
+            const merged =
+                parts.length === 1
+                    ? parts[0]!
+                    : BufferGeometryUtils.mergeGeometries(parts);
+            for (const p of parts) if (p !== merged) p.dispose();
+            const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
+            if (welded !== merged) merged.dispose();
+            welded.computeVertexNormals();
+            downloadStlGeometry(
+                welded,
+                `clicker-${numberOfKeys}-keycaps.stl`,
+            );
+            welded.dispose();
         }
         onKeycapStlDownloaded?.();
     }
@@ -571,10 +697,17 @@
     /** Font loaded async for keycap labels */
     let font = $state<ReturnType<FontLoader["parse"]> | null>(null);
     $effect(() => {
+        const url = keycapTypefaceUrl;
         let cancelled = false;
-        new FontLoader().loadAsync(fontUrl).then((f) => {
-            if (!cancelled) font = f;
-        });
+        font = null;
+        new FontLoader()
+            .loadAsync(url)
+            .then((f) => {
+                if (!cancelled) font = f;
+            })
+            .catch(() => {
+                if (!cancelled) font = null;
+            });
         return () => {
             cancelled = true;
         };

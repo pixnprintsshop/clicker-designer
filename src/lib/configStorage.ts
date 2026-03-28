@@ -13,6 +13,8 @@ export interface StoredDesign {
     keycapSvgByCount?: Record<string, (string | null)[]>;
     /** SVG size on keycap in mm (width and height, aspect ratio kept). */
     keycapSvgSizeMm?: number;
+    /** Three.js typeface (JSON) id from keycapFonts.ts. */
+    keycapFontId?: string;
 }
 
 export interface StoredConfig {
