@@ -7,7 +7,7 @@ export const COLOR_PALETTE = [
     { color: "#141f41", name: "Dark Blue" },
     { color: "#eeb9ba", name: "Peach Pink" },
     { color: "#ff7e94", name: "Pink" },
-    { color: "#3d1590", name: "Purple" },
+    { color: "#562fa7", name: "Purple" },
     { color: "#7174c0", name: "Very Peri" },
     { color: "#d29dcd", name: "Lilac" },
     { color: "#9bf5c8", name: "Min Green" },
