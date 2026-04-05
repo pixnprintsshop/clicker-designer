@@ -6,12 +6,14 @@
         Box3,
         BufferGeometry,
         Color,
+        DoubleSide,
         ExtrudeGeometry,
         Group,
         Mesh,
         MeshBasicMaterial,
         Object3D,
         PerspectiveCamera,
+        Raycaster,
         Scene,
         type Scene as ThreeScene,
         SRGBColorSpace,
@@ -368,6 +370,83 @@
     const MESH_NAME_LEGEND = "legend";
 
     /**
+     * After keycap mesh position + uniform scale + rotation.x = -π/2, local +Z maps to world +Y.
+     * Top surface world Y is mesh Y plus scaled local maxZ (not bottom + (maxZ−minZ) unless minZ === 0).
+     */
+    function keycapTopWorldY(
+        keycapMeshY: number,
+        keycapLocalMaxZ: number,
+        scaleMm: number,
+    ): number {
+        return keycapMeshY + keycapLocalMaxZ * scaleMm;
+    }
+
+    /**
+     * World position of the keycap bbox top-center: local (center.x, center.y, maxZ) after the same
+     * transform as the keycap mesh (uniform scale + rotation.x = −π/2 maps (lx,ly,lz) → (lx, lz, −ly) in parent space).
+     * Legends must use this, not the mesh pivot kp alone — kp is offset by (−cx, +cy) in X/Z.
+     */
+    function keycapLegendAnchorWorld(
+        kp: [number, number, number],
+        center: [number, number, number],
+        maxZ: number,
+        scaleMm: number,
+    ): [number, number, number] {
+        const [cx, cy] = center;
+        const s = scaleMm;
+        return [
+            kp[0] + s * cx,
+            keycapTopWorldY(kp[1], maxZ, s),
+            kp[2] - s * cy,
+        ];
+    }
+
+    /**
+     * World anchor per keycap: ray (+Y → −Y) through layout center hits the actual outer surface (domes, STLs).
+     * Bbox (cx, cy, maxZ) is not guaranteed to lie on the mesh, so analytical Y can sit wrong vs the visible top.
+     */
+    function computeKeycapLegendAnchorsWorld(
+        geom: BufferGeometry,
+        center: [number, number, number],
+        maxZ: number,
+        kpos: [number, number, number][],
+        scaleMm: number,
+    ): [number, number, number][] {
+        if (!kpos.length) return [];
+        const g = geom.clone();
+        const mat = new MeshBasicMaterial({ side: DoubleSide });
+        const mesh = new Mesh(g, mat);
+        mesh.scale.setScalar(scaleMm);
+        mesh.rotation.x = -Math.PI / 2;
+
+        const raycaster = new Raycaster();
+        const rayOrigin = new Vector3();
+        const down = new Vector3(0, -1, 0);
+        const out: [number, number, number][] = [];
+
+        for (let i = 0; i < kpos.length; i++) {
+            const kp = kpos[i]!;
+            const ax = kp[0] + scaleMm * center[0];
+            const az = kp[2] - scaleMm * center[1];
+            mesh.position.set(kp[0], kp[1], kp[2]);
+            mesh.updateMatrixWorld(true);
+
+            rayOrigin.set(ax, 1e6, az);
+            raycaster.set(rayOrigin, down);
+            const hits = raycaster.intersectObject(mesh, false);
+            const topY =
+                hits.length > 0
+                    ? hits[0]!.point.y
+                    : keycapTopWorldY(kp[1], maxZ, scaleMm);
+            out.push([ax, topY, az]);
+        }
+
+        g.dispose();
+        mat.dispose();
+        return out;
+    }
+
+    /**
      * Z-up assembly root for keycap i (keycap + optional border + legend). Caller disposes mesh geometries when done.
      */
     function buildKeycapAssemblyRootGroup(i: number): Group | null {
@@ -395,6 +474,12 @@
         keycapMesh.rotation.x = -Math.PI / 2;
         group.add(keycapMesh);
         if (showBorder && borderGeom && i < borderPositions.length) {
+            borderGeom.computeBoundingBox();
+            const bBox = borderGeom.boundingBox;
+            const zSpan = bBox
+                ? Math.max(bBox.max.z - bBox.min.z, 1e-6)
+                : 1;
+            const borderSz = BORDER_HEIGHT_MM / zSpan;
             const borderMesh = new Mesh(borderGeom.clone());
             borderMesh.name = MESH_NAME_BORDER;
             borderMesh.position.set(
@@ -402,20 +487,26 @@
                 borderPositions[i][1],
                 borderPositions[i][2],
             );
-            borderMesh.scale.setScalar(scaleMm);
+            borderMesh.scale.set(scaleMm, scaleMm, borderSz);
             borderMesh.rotation.x = -Math.PI / 2;
             group.add(borderMesh);
         }
         const letter = keycapLetters[i]?.trim();
         const svgUrl = keycapSvgUrls[i]?.trim();
-        if (svgUrl && svgGeometryByUrl[svgUrl]) {
-            const slotPos = (() => {
-                const [x, y, z] = keycapPositions[i];
-                const keycapBottomY = clickerTopY + y - keycapOffset.minZ;
-                const keycapTopY =
-                    keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
-                return [x, keycapTopY, z] as [number, number, number];
-            })();
+        const needsLegend =
+            (!!svgUrl && !!svgGeometryByUrl[svgUrl]) ||
+            (!!letter && !!font);
+        const legendAnchors = needsLegend
+            ? computeKeycapLegendAnchorsWorld(
+                  keycapGeom,
+                  keycapOffset.center,
+                  keycapOffset.maxZ,
+                  positions,
+                  scaleMm,
+              )
+            : null;
+        if (svgUrl && svgGeometryByUrl[svgUrl] && legendAnchors) {
+            const slotPos = legendAnchors[i]!;
             const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
             svgMesh.name = MESH_NAME_LEGEND;
             svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
@@ -424,9 +515,9 @@
                 keycapSvgSizeMm * scaleMm,
                 legendDepthScaleZ,
             );
-            svgMesh.rotation.x = Math.PI / 2;
+            svgMesh.rotation.x = -Math.PI / 2;
             group.add(svgMesh);
-        } else if (letter && font) {
+        } else if (letter && font && legendAnchors) {
             const geom = new TextGeometry(
                 letter.toUpperCase().slice(0, 1),
                 {
@@ -442,22 +533,14 @@
             if (box) {
                 const center = new Vector3();
                 box.getCenter(center);
-                geom.translate(-center.x, -center.y, -center.z);
+                geom.translate(-center.x, -center.y, -box.min.z);
             }
-            const [x, y, z] = (() => {
-                const [px, py, pz] = keycapPositions[i];
-                const keycapBottomY = clickerTopY + py - keycapOffset.minZ;
-                const keycapTopY =
-                    keycapBottomY + (keycapOffset.maxZ - keycapOffset.minZ);
-                return [px, keycapTopY, pz] as [number, number, number];
-            })();
+            const [lx, ly, lz] = legendAnchors[i]!;
             const textMesh = new Mesh(geom);
             textMesh.name = MESH_NAME_LEGEND;
-            textMesh.position.set(x, y, z);
+            textMesh.position.set(lx, ly, lz);
             textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
-            textMesh.rotation.x = Math.PI / 2;
-            textMesh.rotation.z = Math.PI;
-            textMesh.rotation.y = Math.PI;
+            textMesh.rotation.x = -Math.PI / 2;
             group.add(textMesh);
         }
         group.updateMatrixWorld(true);
@@ -612,8 +695,11 @@
     /** Scene units = mm (1 unit = 1 mm). Source meshes; if in meters, use 1000. */
     const FILE_TO_MM = 1;
 
-    /** Extrusion depth in mm for letter and logo (same height for both). */
-    const LEGEND_DEPTH_MM = 1.2;
+    /** Border ring thickness in world mm (local Z of border STL → world Y after rotation.x = -π/2). */
+    const BORDER_HEIGHT_MM = 0.8;
+
+    /** Legend extrusion height in mm (text depth × Z scale, SVG mesh scale Z). */
+    const LEGEND_DEPTH_MM = 1;
 
     /** Extrusion depth for SVG geometry (before normalize); normalized depth becomes 1. */
     const SVG_EXTRUDE_DEPTH = 2;
@@ -694,38 +780,65 @@
 
     /** Border bbox for centering and placing on keycap top (same Z-up convention, -90° X). */
     const borderOffset = $derived.by(
-        (): { center: [number, number, number]; minZ: number } => {
+        (): {
+            center: [number, number, number];
+            minZ: number;
+            maxZ: number;
+        } => {
             const geom = $borderGeometryStore;
-            if (!geom) return { center: [0, 0, 0], minZ: 0 };
+            if (!geom) return { center: [0, 0, 0], minZ: 0, maxZ: 0 };
             geom.computeBoundingBox();
             const box = geom.boundingBox;
-            if (!box) return { center: [0, 0, 0], minZ: 0 };
+            if (!box) return { center: [0, 0, 0], minZ: 0, maxZ: 0 };
             const center = new Vector3();
             box.getCenter(center);
             return {
                 center: [center.x, center.y, center.z],
                 minZ: box.min.z,
+                maxZ: box.max.z,
             };
         },
     );
-    const keycapHeight = $derived(keycapOffset.maxZ - keycapOffset.minZ);
-    /** Border mesh positions: same logic as text — one per keycap, centered at keycap world (x,z), bottom on keycap top Y. */
+
+    /** XY = file units → mm; Z = squash/stretch so border is exactly BORDER_HEIGHT_MM tall in world Y. */
+    const borderMeshScale = $derived.by((): [number, number, number] => {
+        const b = borderOffset;
+        const zSpan = Math.max(b.maxZ - b.minZ, 1e-6);
+        const sz = BORDER_HEIGHT_MM / zSpan;
+        return [FILE_TO_MM, FILE_TO_MM, sz];
+    });
+    /** Border mesh positions: bottom of border (local minZ) on keycap top surface world Y. */
     const borderMeshPositions = $derived.by((): [number, number, number][] => {
         const positions = keycapPositions;
         const offset = keycapOffset;
         const border = borderOffset;
         const topY = clickerTopY;
+        const s = FILE_TO_MM;
         if (!positions?.length) return [];
+        const [, , sz] = borderMeshScale;
         return positions.map(([x, y, z]) => {
-            const keycapBottomY = topY + y - offset.minZ;
-            const keycapTopY = keycapBottomY + keycapHeight;
-            const borderPosY = keycapTopY - border.minZ;
+            const keycapMeshY = topY + y - offset.minZ;
+            const capTopY = keycapTopWorldY(keycapMeshY, offset.maxZ, s);
+            const borderPosY = capTopY - border.minZ * sz;
             return [x - border.center[0], borderPosY, z + border.center[1]] as [
                 number,
                 number,
                 number,
             ];
         });
+    });
+
+    /** Per-keycap world position for legends (raycast surface Y at layout center in XZ). */
+    const keycapLegendAnchorsWorld = $derived.by((): [number, number, number][] => {
+        const geom = $keycapGeometryStore;
+        if (!geom) return [];
+        return computeKeycapLegendAnchorsWorld(
+            geom,
+            keycapOffset.center,
+            keycapOffset.maxZ,
+            keycapMeshPositions,
+            FILE_TO_MM,
+        );
     });
 
     /** Font loaded async for keycap labels */
@@ -751,24 +864,17 @@
     const keycapSvgSlots = $derived.by(
         (): { position: [number, number, number]; url: string }[] => {
             const urls = keycapSvgUrls;
-            const positions = keycapPositions;
-            const offset = keycapOffset;
-            const topY = clickerTopY;
-            if (!urls?.length || !positions?.length) return [];
-            return positions
+            const mappedList = keycapPositions;
+            const anchors = keycapLegendAnchorsWorld;
+            if (!urls?.length || !mappedList?.length) return [];
+            return mappedList
                 .map((mapped, i) => {
                     const url = urls[i];
                     if (!mapped || !url?.trim()) return null;
-                    const [x, y, z] = mapped;
-                    const keycapBottomY = topY + y - offset.minZ;
-                    const keycapTopY =
-                        keycapBottomY + (offset.maxZ - offset.minZ);
+                    const pos = anchors[i];
+                    if (!pos) return null;
                     return {
-                        position: [x, keycapTopY, z] as [
-                            number,
-                            number,
-                            number,
-                        ],
+                        position: pos,
                         url,
                     };
                 })
@@ -822,7 +928,8 @@
                     if (box) {
                         const center = new Vector3();
                         box.getCenter(center);
-                        merged.translate(-center.x, -center.y, -center.z);
+                        // Bottom of extrusion at z=0 (not centered in z), so legend sits on keycap without sinking in.
+                        merged.translate(-center.x, -center.y, -box.min.z);
                         merged.computeBoundingBox();
                         box = merged.boundingBox;
                         if (box) {
@@ -832,18 +939,18 @@
                                 size.x,
                                 size.y,
                                 size.z,
-                                0.001,
+                                0,
                             );
                             const scale = 1 / maxDim;
                             merged.scale(scale, scale, scale);
                             // Normalize depth to 1 so mesh scale Z = LEGEND_DEPTH_MM gives same height as letter
                             merged.computeBoundingBox();
                             box = merged.boundingBox;
-                            if (box) {
-                                const zSize = box.max.z - box.min.z;
-                                if (zSize > 0.001)
-                                    merged.scale(1, 1, 1 / zSize);
-                            }
+                            // if (box) {
+                            //     const zSize = box.max.z - box.min.z;
+                            //     if (zSize > 0.001)
+                            //         merged.scale(1, 1, 1 / zSize);
+                            // }
                         }
                     }
                     svgGeometryByUrl = { ...svgGeometryByUrl, [url]: merged };
@@ -861,16 +968,16 @@
             const f = font;
             const letters = keycapLetters;
             const urls = keycapSvgUrls;
-            const positions = keycapPositions;
-            const offset = keycapOffset;
-            const topY = clickerTopY;
-            if (!f || !letters?.length || !positions?.length) return [];
+            const mappedList = keycapPositions;
+            const anchors = keycapLegendAnchorsWorld;
+            if (!f || !letters?.length || !mappedList?.length) return [];
             return letters
                 .map((letter, i) => {
                     if (urls?.[i]) return null;
-                    const mapped = positions[i];
+                    const mapped = mappedList[i];
                     if (!mapped || !letter?.trim()) return null;
-                    const [x, y, z] = mapped;
+                    const pos = anchors[i];
+                    if (!pos) return null;
                     const geom = new TextGeometry(
                         letter.toUpperCase().slice(0, 1),
                         {
@@ -886,22 +993,11 @@
                     if (box) {
                         const center = new Vector3();
                         box.getCenter(center);
-                        geom.translate(-center.x, -center.y, -center.z);
+                        geom.translate(-center.x, -center.y, -box.min.z);
                     }
-                    // Same mapping as keycap mesh: X/Z from centered keycap, Y = keycap top + offset
-                    const textX = x;
-                    const textZ = z;
-                    const keycapBottomY = topY + y - offset.minZ;
-                    const keycapTopY =
-                        keycapBottomY + (offset.maxZ - offset.minZ);
-                    const textY = keycapTopY;
                     return {
                         geometry: geom,
-                        position: [textX, textY, textZ] as [
-                            number,
-                            number,
-                            number,
-                        ],
+                        position: pos,
                     };
                 })
                 .filter((x): x is NonNullable<typeof x> => x != null);
@@ -991,7 +1087,7 @@
             <T.Mesh
                 geometry={$borderGeometryStore}
                 position={pos}
-                scale={FILE_TO_MM}
+                scale={borderMeshScale}
                 rotation.x={-Math.PI / 2}
             >
                 <T.MeshStandardMaterial
@@ -1007,10 +1103,10 @@
             {position}
             scale={[
                 textSizeMm * FILE_TO_MM,
-                -textSizeMm * FILE_TO_MM,
+                textSizeMm * FILE_TO_MM,
                 textSizeMm * FILE_TO_MM,
             ]}
-            rotation.x={Math.PI / 2}
+            rotation.x={-Math.PI / 2}
         >
             <T.MeshStandardMaterial
                 color={textBorderColor}
@@ -1029,7 +1125,7 @@
                     keycapSvgSizeMm * FILE_TO_MM,
                     LEGEND_DEPTH_MM * FILE_TO_MM,
                 ]}
-                rotation.x={Math.PI / 2}
+                rotation.x={-Math.PI / 2}
             >
                 <T.MeshStandardMaterial
                     color={textBorderColor}
