@@ -9,7 +9,10 @@
         ExtrudeGeometry,
         Group,
         Mesh,
+        MeshBasicMaterial,
+        Object3D,
         PerspectiveCamera,
+        Scene,
         type Scene as ThreeScene,
         SRGBColorSpace,
         Vector3,
@@ -17,11 +20,11 @@
         WebGLRenderTarget,
     } from "three";
     import { TextGeometry } from "three/addons/geometries/TextGeometry.js";
-    import { STLExporter } from "three/addons/exporters/STLExporter.js";
     import { FontLoader } from "three/addons/loaders/FontLoader.js";
     import { STLLoader } from "three/addons/loaders/STLLoader.js";
     import { SVGLoader } from "three/addons/loaders/SVGLoader.js";
     import * as BufferGeometryUtils from "three/addons/utils/BufferGeometryUtils.js";
+    import { exportTo3MF } from "three-3mf-exporter";
 
     import {
         DEFAULT_KEYCAP_FONT_ID,
@@ -80,12 +83,12 @@
         snapshotReady?: (takeSnapshot: () => void) => void;
         /** Called after the snapshot file download has been triggered. */
         onSnapshotDownloaded?: () => void;
-        /** Called with exportKeycapStl(keycapIndex?) when scene is ready to export keycap STL(s). All keys → one STL; optional index → single keycap. */
-        exportKeycapStlReady?: (
-            exportKeycapStl: (keycapIndex?: number) => void,
+        /** Called with exportKeycap3mf(keycapIndex?) when scene is ready. All keys → one 3MF; optional index → single keycap. */
+        exportKeycap3mfReady?: (
+            exportKeycap3mf: (keycapIndex?: number) => Promise<void>,
         ) => void;
-        /** Called after keycap STL file(s) download has been triggered. */
-        onKeycapStlDownloaded?: () => void;
+        /** Called after keycap 3MF download has been triggered. */
+        onKeycap3mfDownloaded?: () => void;
     }
     let {
         objectColor = "#ec4899",
@@ -106,8 +109,8 @@
         snapshotKeycapFontLabel = "",
         snapshotReady,
         onSnapshotDownloaded,
-        exportKeycapStlReady,
-        onKeycapStlDownloaded,
+        exportKeycap3mfReady,
+        onKeycap3mfDownloaded,
     }: Props = $props();
 
     const threlte = useThrelte();
@@ -360,12 +363,14 @@
         }
     });
 
-    const stlExporter = new STLExporter();
+    const MESH_NAME_KEYCAP = "keycap";
+    const MESH_NAME_BORDER = "border";
+    const MESH_NAME_LEGEND = "legend";
 
     /**
-     * Build one merged BufferGeometry for keycap index i (keycap + border + legend), Z-up, caller must dispose.
+     * Z-up assembly root for keycap i (keycap + optional border + legend). Caller disposes mesh geometries when done.
      */
-    function mergeKeycapAssemblyGeometry(i: number): BufferGeometry | null {
+    function buildKeycapAssemblyRootGroup(i: number): Group | null {
         const keycapGeom = get(keycapGeometryStore);
         const borderGeom = get(borderGeometryStore);
         if (!keycapGeom) return null;
@@ -380,6 +385,7 @@
 
         const group = new Group();
         const keycapMesh = new Mesh(keycapGeom.clone());
+        keycapMesh.name = MESH_NAME_KEYCAP;
         keycapMesh.position.set(
             positions[i][0],
             positions[i][1],
@@ -390,6 +396,7 @@
         group.add(keycapMesh);
         if (showBorder && borderGeom && i < borderPositions.length) {
             const borderMesh = new Mesh(borderGeom.clone());
+            borderMesh.name = MESH_NAME_BORDER;
             borderMesh.position.set(
                 borderPositions[i][0],
                 borderPositions[i][1],
@@ -410,6 +417,7 @@
                 return [x, keycapTopY, z] as [number, number, number];
             })();
             const svgMesh = new Mesh(svgGeometryByUrl[svgUrl].clone());
+            svgMesh.name = MESH_NAME_LEGEND;
             svgMesh.position.set(slotPos[0], slotPos[1], slotPos[2]);
             svgMesh.scale.set(
                 keycapSvgSizeMm * scaleMm,
@@ -444,6 +452,7 @@
                 return [px, keycapTopY, pz] as [number, number, number];
             })();
             const textMesh = new Mesh(geom);
+            textMesh.name = MESH_NAME_LEGEND;
             textMesh.position.set(x, y, z);
             textMesh.scale.set(textScaleXY, textScaleXY, textScaleZ);
             textMesh.rotation.x = Math.PI / 2;
@@ -456,52 +465,80 @@
         root.rotation.x = Math.PI / 2;
         root.add(group);
         root.updateMatrixWorld(true);
-
-        const geoms: BufferGeometry[] = [];
-        root.traverse((obj) => {
-            if (obj instanceof Mesh) {
-                const gWorld = obj.geometry.clone();
-                gWorld.applyMatrix4(obj.matrixWorld);
-                const g = gWorld.toNonIndexed();
-                gWorld.dispose();
-                for (const name of Object.keys(g.attributes)) {
-                    if (name !== "position") g.deleteAttribute(name);
-                }
-                if (g.index) g.setIndex(null);
-                geoms.push(g);
-            }
-        });
-
-        let merged: BufferGeometry | null =
-            geoms.length === 0
-                ? null
-                : geoms.length === 1
-                    ? geoms[0]
-                    : BufferGeometryUtils.mergeGeometries(geoms);
-        if (!merged) {
-            group.traverse((obj) => {
-                if (obj instanceof Mesh) obj.geometry.dispose();
-            });
-            return null;
-        }
-        for (const g of geoms) if (g !== merged) g.dispose();
-        const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
-        if (welded !== merged) merged.dispose();
-        welded.computeVertexNormals();
-
-        group.traverse((obj) => {
-            if (obj instanceof Mesh) obj.geometry.dispose();
-        });
-        return welded;
+        return root;
     }
 
-    function downloadStlGeometry(geometry: BufferGeometry, filename: string) {
-        const singleMesh = new Mesh(geometry);
-        singleMesh.updateMatrixWorld(true);
-        const stlData = stlExporter.parse(singleMesh, { binary: true });
-        const blob = new Blob([stlData], {
-            type: "application/octet-stream",
+    function disposeAssemblyRootGeometries(root: Group): void {
+        root.traverse((obj) => {
+            if (obj instanceof Mesh && obj.geometry) obj.geometry.dispose();
         });
+    }
+
+    /**
+     * Flat group of meshes with world-space geometry and MeshBasicMaterial (three-3mf-exporter expects this pattern).
+     */
+    function bakeAssemblyRootTo3mfGroup(root: Group): Group {
+        root.updateMatrixWorld(true);
+        const exportGroup = new Group();
+        const cKeycap = new Color(keycapColor);
+        const cLegend = new Color(textBorderColor);
+
+        root.traverse((obj) => {
+            if (!(obj instanceof Mesh)) return;
+            const gWorld = obj.geometry.clone();
+            gWorld.applyMatrix4(obj.matrixWorld);
+            const g = gWorld.toNonIndexed();
+            if (g !== gWorld) gWorld.dispose();
+            for (const name of Object.keys(g.attributes)) {
+                if (name !== "position") g.deleteAttribute(name);
+            }
+            if (g.index) g.setIndex(null);
+
+            const color =
+                obj.name === MESH_NAME_KEYCAP
+                    ? cKeycap
+                    : cLegend;
+            const mat = new MeshBasicMaterial({ color });
+            const m = new Mesh(g, mat);
+            m.name = obj.name || "part";
+            exportGroup.add(m);
+        });
+
+        exportGroup.updateMatrixWorld(true);
+        return exportGroup;
+    }
+
+    function dispose3mfExportGroup(group: Object3D): void {
+        group.traverse((obj) => {
+            if (obj instanceof Mesh) {
+                obj.geometry?.dispose();
+                const mat = obj.material;
+                if (Array.isArray(mat)) {
+                    for (const m of mat) m.dispose();
+                } else {
+                    mat?.dispose();
+                }
+            }
+        });
+    }
+
+    /**
+     * Pass a Scene when exporting multiple top-level objects: three-3mf-exporter only
+     * iterates `object.children` when `object.type === "Scene"`; a Group wrapper becomes a single merged assembly.
+     */
+    async function download3mfFromRoot(
+        root: Object3D,
+        filename: string,
+    ): Promise<void> {
+        root.updateMatrixWorld(true);
+        const blob = await exportTo3MF(root, {
+            metadata: {
+                Application: "Clicker Designer",
+                ApplicationTitle: "Clicker Designer keycap",
+            },
+        });
+        dispose3mfExportGroup(root);
+        if (!blob || blob.size === 0) return;
         const a = document.createElement("a");
         a.href = URL.createObjectURL(blob);
         a.download = filename;
@@ -510,10 +547,9 @@
     }
 
     /**
-     * Export one or all keycaps as STL (keycap + border + letter/SVG).
-     * @param keycapIndex - If set, export only this keycap (0-based). Otherwise export all keycaps in one STL when multiple keys; one file if a single key.
+     * Export one or all keycaps as 3MF (Group + MeshBasicMaterial + baked transforms; matches three-3mf-exporter expectations).
      */
-    function exportKeycapStl(keycapIndex?: number) {
+    async function exportKeycap3mf(keycapIndex?: number) {
         const keycapGeom = get(keycapGeometryStore);
         if (!keycapGeom) return;
         const positions = keycapMeshPositions;
@@ -522,60 +558,58 @@
                 ? [keycapIndex]
                 : positions.map((_, i) => i);
 
-        const exportOne = (i: number) => {
-            const welded = mergeKeycapAssemblyGeometry(i);
-            if (!welded) return;
+        const exportOne = async (i: number) => {
+            const root = buildKeycapAssemblyRootGroup(i);
+            if (!root) return;
+            const exportGroup = bakeAssemblyRootTo3mfGroup(root);
+            exportGroup.name = `Keycap ${i + 1}`;
+            disposeAssemblyRootGeometries(root);
             const letter = keycapLetters[i]?.trim();
             const svgUrl = keycapSvgUrls[i]?.trim();
             const name =
                 letter && !svgUrl
-                    ? `keycap-${i + 1}-${letter.toUpperCase()}.stl`
-                    : `keycap-${i + 1}.stl`;
-            downloadStlGeometry(welded, name);
-            welded.dispose();
+                    ? `keycap-${i + 1}-${letter.toUpperCase()}.3mf`
+                    : `keycap-${i + 1}.3mf`;
+            await download3mfFromRoot(exportGroup, name);
         };
 
         if (keycapIndex !== undefined) {
-            exportOne(keycapIndex);
+            await exportOne(keycapIndex);
         } else if (indices.length <= 1) {
-            if (indices.length === 1) exportOne(indices[0]!);
+            if (indices.length === 1) await exportOne(indices[0]!);
         } else {
-            const parts: BufferGeometry[] = [];
+            const exportScene = new Scene();
             for (const i of indices) {
                 if (i >= positions.length) continue;
-                const g = mergeKeycapAssemblyGeometry(i);
-                if (g) parts.push(g);
+                const root = buildKeycapAssemblyRootGroup(i);
+                if (!root) continue;
+                const part = bakeAssemblyRootTo3mfGroup(root);
+                disposeAssemblyRootGeometries(root);
+                part.name = `Keycap ${i + 1}`;
+                exportScene.add(part);
             }
-            if (parts.length === 0) {
-                onKeycapStlDownloaded?.();
+            if (exportScene.children.length === 0) {
+                onKeycap3mfDownloaded?.();
                 return;
             }
-            const merged =
-                parts.length === 1
-                    ? parts[0]!
-                    : BufferGeometryUtils.mergeGeometries(parts);
-            for (const p of parts) if (p !== merged) p.dispose();
-            const welded = BufferGeometryUtils.mergeVertices(merged, 0.02);
-            if (welded !== merged) merged.dispose();
-            welded.computeVertexNormals();
-            downloadStlGeometry(
-                welded,
-                `clicker-${numberOfKeys}-keycaps.stl`,
+            exportScene.updateMatrixWorld(true);
+            await download3mfFromRoot(
+                exportScene,
+                `clicker-${numberOfKeys}-keycaps.3mf`,
             );
-            welded.dispose();
         }
-        onKeycapStlDownloaded?.();
+        onKeycap3mfDownloaded?.();
     }
 
     $effect(() => {
         // Subscribe reactively so we run again when the loader finishes
         const keycapGeom = $keycapGeometryStore;
         if (keycapGeom) {
-            exportKeycapStlReady?.(exportKeycapStl);
+            exportKeycap3mfReady?.(exportKeycap3mf);
         }
     });
 
-    /** Scene units = mm (1 unit = 1 mm). If STL is in meters, use 1000; if STL is already in mm, use 1. */
+    /** Scene units = mm (1 unit = 1 mm). Source meshes; if in meters, use 1000. */
     const FILE_TO_MM = 1;
 
     /** Extrusion depth in mm for letter and logo (same height for both). */

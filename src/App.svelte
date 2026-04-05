@@ -78,12 +78,12 @@
   let presetModalOpen = $state(false);
   let takeSnapshot = $state<(() => void) | null>(null);
   let showSnapshotThankYou = $state(false);
-  let exportKeycapStl = $state<
-    | ((keycapIndex?: number) => void)
+  let exportKeycap3mf = $state<
+    | ((keycapIndex?: number) => Promise<void>)
     | null
   >(null);
 
-  /** Show STL download FAB only when URL has ?download=1 */
+  /** Show keycap 3MF download FAB when URL has ?download=1 */
   let showDownloadButton = $state(false);
   onMount(() => {
     const syncDownloadParam = () => {
@@ -1178,69 +1178,22 @@
             onSnapshotDownloaded={() => {
               showSnapshotThankYou = true;
             }}
-            exportKeycapStlReady={(fn) => {
-              exportKeycapStl = fn;
+            exportKeycap3mfReady={(fn) => {
+              exportKeycap3mf = fn;
             }}
-            onKeycapStlDownloaded={() => {}}
+            onKeycap3mfDownloaded={() => {}}
           />
         </Canvas>
       </main>
-      <button
-        type="button"
-        class="absolute bottom-4 {showDownloadButton
-          ? 'right-32 md:right-28'
-          : 'right-20 md:right-16'} w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
-        title="Save snapshot (front + top view)"
-        aria-label="Save snapshot (front and top view)"
-        onclick={() => takeSnapshot?.()}
+      <div
+        class="absolute bottom-4 right-4 z-[50] flex flex-row-reverse items-center gap-2"
       >
-        <svg
-          class="w-5 h-5"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          aria-hidden="true"
-        >
-          <path
-            d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
-          />
-          <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
-          <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
-        </svg>
-      </button>
-      {#if showDownloadButton}
         <button
           type="button"
-          class="absolute bottom-4 right-20 md:right-16 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation z-[50] hover:bg-brand-light"
-          title="Download keycap STL (all keys in one file: keycap + border + letter/SVG per key)"
-          aria-label="Download keycap STL"
-          onclick={() => exportKeycapStl?.()}
-        >
-          <svg
-            class="w-5 h-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4" />
-            <path d="M7 10l5 5 5-5" />
-            <path d="M12 15V3" />
-          </svg>
-        </button>
-      {/if}
-      <button
-        type="button"
-        class="absolute bottom-4 right-4 w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-red-600 hover:border-red-200 touch-manipulation z-[50] {designs.length <=
-        1
-          ? 'opacity-60 cursor-not-allowed pointer-events-none'
-          : 'hover:bg-red-50'}"
+          class="w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-red-600 hover:border-red-200 touch-manipulation {designs.length <=
+          1
+            ? 'opacity-60 cursor-not-allowed pointer-events-none'
+            : 'hover:bg-red-50'}"
         title={designs.length <= 1
           ? "Add another design to delete"
           : "Delete current design"}
@@ -1266,6 +1219,55 @@
           <path d="M10 11v6M14 11v6" />
         </svg>
       </button>
+        {#if showDownloadButton}
+          <button
+            type="button"
+            class="w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation hover:bg-brand-light"
+            title="Download keycap 3MF (all keys in one file: keycap + border + letter/SVG per key)"
+            aria-label="Download keycap 3MF"
+            onclick={() => void exportKeycap3mf?.()}
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2 2v-4" />
+              <path d="M7 10l5 5 5-5" />
+              <path d="M12 15V3" />
+            </svg>
+          </button>
+        {/if}
+        <button
+          type="button"
+          class="w-12 h-12 md:w-10 md:h-10 flex items-center justify-center rounded-full bg-white border-2 border-slate-300 shadow-lg text-slate-600 hover:text-brand hover:border-brand touch-manipulation hover:bg-brand-light"
+          title="Save snapshot (front + top view)"
+          aria-label="Save snapshot (front and top view)"
+          onclick={() => takeSnapshot?.()}
+        >
+          <svg
+            class="w-5 h-5"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+            stroke-width="2"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+            />
+            <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path d="M19 17v-2a2 2 0 00-2-2H7a2 2 0 00-2 2v2" />
+          </svg>
+        </button>
+      </div>
     </div>
     <div
       class="flex-shrink-0 flex items-center gap-1 px-2 py-2 md:px-3 md:py-2.5 bg-surface border-t border-brand-border overflow-x-auto"

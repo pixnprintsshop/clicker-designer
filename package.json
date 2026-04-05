@@ -43,6 +43,7 @@
     "@types/three": "^0.182.0",
     "@vercel/analytics": "^1.6.1",
     "tailwindcss": "^4.1.18",
-    "three": "^0.182.0"
+    "three": "^0.182.0",
+    "three-3mf-exporter": "^45.2.0"
   }
 }
